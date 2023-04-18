@@ -72,11 +72,11 @@ $reverse{undef}=0;			#catching
 use Object::Pad;
 
 
+
 # Fast Binary Search subroutines
 #
 use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_KEY."]"};
 
-use List::Insertion {prefix=>"find", type=>"string", duplicate=>"left", accessor=>"->[0]"};
 
 # Public suffix list list
 #
@@ -250,9 +250,10 @@ method set_cookies($request_uri, @cookies){
 
     ($c->[COOKIE_SECURE] and ($c->[COOKIE_PATH] eq "/") and
     !$c->[COOKIE_DOMAIN]) or next 
-      if $c->[COOKIE_NAME] =~ m/^__Host-/;
+      if 0== index($c->[COOKIE_NAME],"__Host-");
 
-    $c->[COOKIE_SECURE] or next if $c->[COOKIE_NAME] =~ m/^__Secure-/;
+    $c->[COOKIE_SECURE] or next 
+      if 0==index($c->[COOKIE_NAME], "__Secure-");
 
 
     if(defined $c->[COOKIE_MAX_AGE]){
@@ -305,8 +306,8 @@ method set_cookies($request_uri, @cookies){
       next unless defined $sld;
       $sld=scalar reverse $sld;
       unless(
-        $c->[COOKIE_DOMAIN]=~/^$sld(?:$|\.)/
-        #0==index($c->[COOKIE_DOMAIN], $sld)
+        0==index($c->[COOKIE_DOMAIN], $sld)
+          and (substr($c->[COOKIE_DOMAIN],length($sld),1)||".") eq "."
         ){ 
         Log::OK::TRACE and log_trace "Domain is public suffix. reject";
         next 
@@ -315,8 +316,8 @@ method set_cookies($request_uri, @cookies){
       # Also cookie domain needs to be sub string of request host. ie no sub
       # domain. 
       if(
-          $rhost=~/^$c->[COOKIE_DOMAIN](?:$|\.)/
-          #0==index($rhost, $c->[COOKIE_DOMAIN])
+          0==index($rhost, $c->[COOKIE_DOMAIN])
+            and (substr($rhost,length($c->[COOKIE_DOMAIN]),1)||".") eq "."
         ){ 
         # Domain must be at least substring (parent domain).
         $c->[COOKIE_HOST_ONLY]=undef;
@@ -361,13 +362,10 @@ method set_cookies($request_uri, @cookies){
     # Here we domain and path match cookies in the store.
     # We DON't want to replace/update existing cookies marked as secure 
     # if the current set_cookie is marked unsecure.
-    #########################################################################################################
-    # if(!$c->[COOKIE_SECURE]){                                                                             #
-    #   my @matches=$self->get_cookies("$scheme://".scalar reverse($c->[COOKIE_DOMAIN]).$c->[COOKIE_PATH]); #
-    #   next if grep(($_->[COOKIE_SECURE] and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]), @matches)            #
-    # }                                                                                                     #
-    #                                                                                                       #
-    #########################################################################################################
+    if(!$c->[COOKIE_SECURE]){
+      my @matches=$self->get_cookies("$scheme://".scalar reverse($c->[COOKIE_DOMAIN]).$c->[COOKIE_PATH]);
+      next if grep(($_->[COOKIE_SECURE] and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]), @matches)
+    }
     # Set the creation time
 
     # Set Creation time
@@ -472,10 +470,10 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   $request_uri =~ 
     m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
 
-  my ($ruser, $rpassword, $ref_host, $rport)=$authority =~  
-    m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
+    #my ($ruser, $rpassword, $ref_host, $rport)=$authority =~  
+    #m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
 
-  $ref_host=scalar reverse $ref_host;
+    #$ref_host=scalar reverse $ref_host;
   
   # Mark as same site if the referer is undefined This is intended to represent
   # top level navigation (typing an address) where the refering site is not
@@ -487,7 +485,6 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   #
   $same_site||=($rscheme eq $scheme) && ($rauthority eq $authority);
 
-  my $site_for_cookies;
 
 
   # Iterate through all cookies until the domain no longer matches
@@ -495,7 +492,6 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   local $_;
   my $time=time-$tz_offset;
   my @output;
-  my $process=1;
   my $path_ok=1;
   my $run;
   
@@ -618,12 +614,14 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
         $path||="/";    #TODO find a reference to a standard or rfc for this
         Log::OK::TRACE and log_trace "PATH: $path";
         Log::OK::TRACE and log_trace "Cookie PATH: $_->[COOKIE_PATH]";
+
         if($path eq $_->[COOKIE_PATH]){
           $path_ok=1;
         }
+
         elsif (substr($_->[COOKIE_PATH], -1, 1) eq "/"){
           # Cookie path ends in a slash?
-          $path_ok=index($path, $_->[COOKIE_PATH])==0      # Yes, check if cookie path is a prefix
+          $path_ok=index($path, $_->[COOKIE_PATH])==0  # Yes, check if cookie path is a prefix
         }
         elsif(substr($path,length($_->[COOKIE_PATH]), 1) eq "/"){
           $path_ok= 0==index $path, $_->[COOKIE_PATH];
@@ -644,11 +642,12 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
         #
         $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
         Log::OK::TRACE and log_trace "Pushing cookie";
-        push @output, $_;   #Copy  struct
+        push @output, $_;   
 
       }
       $index++;
     }
+    #say "Last index: $index, size ".@_cookies;
   }
    
   # TODO:
@@ -663,12 +662,10 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   #        earlier creation-times are listed before cookies with later
   #        creation-times.
 
-  ##########################################################################
-  # @output= sort {                                                        #
-  #         length( $b->[COOKIE_PATH] ) <=> length( $a->[COOKIE_PATH] )    #
-  #           || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME] #
-  #     } @output;                                                         #
-  ##########################################################################
+  @output= sort {
+          length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])
+            || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME]
+      } @output;
   
  
   \@output;
