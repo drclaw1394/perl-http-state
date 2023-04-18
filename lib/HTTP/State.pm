@@ -76,6 +76,7 @@ use Object::Pad;
 #
 use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_KEY."]"};
 
+use List::Insertion {prefix=>"find", type=>"string", duplicate=>"left", accessor=>"->[0]"};
 
 # Public suffix list list
 #
@@ -149,8 +150,6 @@ method second_level_domain{
     }
     $highest;
 }
-
-
 
 method suffix{
   $_suffix_cache
@@ -241,6 +240,7 @@ method set_cookies($request_uri, @cookies){
 
 
 
+    # Is this right?
     $scheme ne "https" and next if $c->[COOKIE_SECURE];
 
     # Set same site to None if not provided
@@ -361,11 +361,13 @@ method set_cookies($request_uri, @cookies){
     # Here we domain and path match cookies in the store.
     # We DON't want to replace/update existing cookies marked as secure 
     # if the current set_cookie is marked unsecure.
-    if(!$c->[COOKIE_SECURE]){
-      my @matches=$self->get_cookies("$scheme://".scalar reverse($c->[COOKIE_DOMAIN]).$c->[COOKIE_PATH]);
-      next if grep(($_->[COOKIE_SECURE] and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]), @matches)
-    }
-
+    #########################################################################################################
+    # if(!$c->[COOKIE_SECURE]){                                                                             #
+    #   my @matches=$self->get_cookies("$scheme://".scalar reverse($c->[COOKIE_DOMAIN]).$c->[COOKIE_PATH]); #
+    #   next if grep(($_->[COOKIE_SECURE] and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]), @matches)            #
+    # }                                                                                                     #
+    #                                                                                                       #
+    #########################################################################################################
     # Set the creation time
 
     # Set Creation time
@@ -450,6 +452,7 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   #
   # Parse the uri
 
+  
   my ($scheme, $authority, $path, $query, $fragment) =
   $request_uri =~ 
     m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
@@ -521,6 +524,7 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
     Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
     Log::OK::TRACE and log_trace Dumper \@_cookies;
     Log::OK::TRACE and log_trace  "looking for host: $sld";
+
     while( $index<@_cookies){
       #say " while in get cookeis index: $index";
       $_=$_cookies[$index];
@@ -533,7 +537,6 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
       # Domains are stored 'reversed'. That means prefixes will always come first.
       # When a  domain no longer matches as a prefix then we know the search can stop
       last if index $sld, $_->[COOKIE_DOMAIN];
-      #say "continue";
 
 
       # Need an exact match, not a domain match
@@ -660,8 +663,13 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   #        earlier creation-times are listed before cookies with later
   #        creation-times.
 
-
-  #@output=sort {$b->[COOKIE_CREATION_TIME] <=> $a->[COOKIE_CREATION_TIME]} reverse @output;
+  ##########################################################################
+  # @output= sort {                                                        #
+  #         length( $b->[COOKIE_PATH] ) <=> length( $a->[COOKIE_PATH] )    #
+  #           || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME] #
+  #     } @output;                                                         #
+  ##########################################################################
+  
  
   \@output;
 
@@ -677,7 +685,7 @@ method get_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef)
 
 method encode_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
   my $cookies=$self->_get_cookies($request_uri, $referer_uri, $action, $name);
-  return unless @$cookies;
+  return "" unless @$cookies;
   join "; ", map { "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]"} @$cookies;
 
 }
@@ -758,7 +766,6 @@ method decode_set_cookie{
 	my $value;
 	my @values;
 	my $first=1;
-
   my @fields=split /;\s*/, $_[0];
   #Value needs to be the first field 
 	my $count=($values[1], $values[2])=split "=", shift(@fields), 2;
