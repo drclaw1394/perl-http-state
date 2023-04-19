@@ -86,7 +86,7 @@ my $protocol_http_jar=Protocol::HTTP::CookieJar->new;
 my @sample=map int rand(@cookies), 1..50;
 #say join "\n", map $urls[$_], @sample;
 
-cmpthese -1, {
+cmpthese 1000, {
   http_state=>sub { 
     for(@sample){
       #say $urls[$_];
@@ -99,12 +99,14 @@ cmpthese -1, {
       $http_cookiejar->add($urls[$_], $cookies[$_]);
     }
   },
+
   protocol_http=>sub {
+
     for(@sample){
-      my $e=$proto_cookies[$_];
-      my @copy=@$e;
-      my (undef, $name)=(shift(@copy), shift(@copy));
-      $protocol_http_jar->add($name, { @copy }, URI::XS->new($urls[$_]));
+      my $copy=$http_state_jar->decode_set_cookie($cookies[$_]);
+      my $hash=$http_state_jar->cookie_as_hash($copy);
+
+      $protocol_http_jar->add(delete($hash->{name}), $hash, URI::XS->new($urls[$_]));
     }
   }
 
@@ -118,7 +120,7 @@ say "Size of protocol http_cookiejar: ".keys $protocol_http_jar->all_cookies->%*
 #exit;
 
 my @samples=map int rand(@urls), 1..15;
-my @results=([],[]);
+my @results=([],[],[]);
 cmpthese 1000, {
   http_state=>sub { 
     for(@samples){
@@ -135,26 +137,36 @@ cmpthese 1000, {
       push $results[1]->@*, $string;
     }
   },
+
   protocol_http=>sub {
     for(@samples){
-      my $string=$protocol_http_jar->find(URI::XS->new($urls[$_]));
+      my $array=$protocol_http_jar->find(URI::XS->new($urls[$_]));
+      #say "size : ". scalar @$array;
       #say "http_cookiejar: ".$string if $string;
-      push $results[1]->@*, $string;
+      if(keys $array->[0]->%*){
+        #say "domain :$_->{domain} path : $_->{path} name: $_->{name}" for @$array;
+        my $string= join "; ", map "$_->{name}=$_->{value}", $array->[0];
+        #say "protocol_http: ".$string;
+        push $results[2]->@*, $string;
+      }
+      else{
+        push $results[2]->@*, "";
+      }
     }
   }
 
 };
-
 my $ok=1;
 
 say "Found ".$results[0]->@*." cookies";
 for(0..$results[0]->@*-1){
   my $ok=($results[0][$_] eq $results[1][$_]);
+   $ok&&=($results[1][$_] eq $results[2][$_]);
 
   #Print infor on mis matched items
-  #say "$results[0][$_], $results[1][$_]" if $results[1][$_];
   unless($ok){
-    say "miss match for $urls[$_]";
+    #say "miss match for $urls[$_]";
+    say "$results[0][$_]| $results[1][$_]| $results[2][$_]" if $results[1][$_];
   }
 
 }

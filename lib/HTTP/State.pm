@@ -123,6 +123,7 @@ field $_public_suffix_sub :param=undef;        # Sub used for public suffix look
 field @_domain;         #list of [dk, dv ] structure sorted by dk
                         # dv is a array of [pk, pv] which is sorted by pk
                         # pv is array of [cn, ca] which is sorted by cn
+field %_sld_cache;
   
 BUILD{
   unless($_public_suffix_sub){
@@ -297,7 +298,7 @@ method set_cookies($request_uri, @cookies){
     if($c->[COOKIE_DOMAIN]){
       # DO a public suffix check on cookies. Need to ensure the domain for the cookie is NOT a suffix
 
-      my $sld=$self->second_level_domain(scalar reverse $c->[COOKIE_DOMAIN]);
+      my $sld=$_sld_cache{$c->[COOKIE_DOMAIN]}//=$self->second_level_domain(scalar reverse $c->[COOKIE_DOMAIN]);
 
 
       
@@ -506,7 +507,8 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
   # search of sorted domain names iterates over the following items until the
   # domain key, substring no longer matches
   #
-  my @levels=split /\./, $host=~s/$sld\.//r;
+  #my @levels=split /\./, $host=~s/$sld\.//r;
+  my @levels=split /\./, substr $host, length($sld)+1;
 
   while(@levels){
     $sld="$sld.".shift @levels;
@@ -694,6 +696,7 @@ method get_kv_cookies($request_uri, $referer_uri=undef, $action=undef, $name=und
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
 
+
 # Mimic HTTP::CookieJar API
 # This  should work with HTTP::Tiny for example
 # The referer and action are set to defaults
@@ -732,13 +735,13 @@ method encode_set_cookie ($cookie, $store_flag=undef){
   #
 	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
     my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $string.="; Expires=$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
+    $string.="; $names[COOKIE_EXPIRES]=$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
 	}
 
   # Do flags (attibutes with no values)
   #
-	$string.="; Secure" if defined $cookie->[COOKIE_SECURE];				
-	$string.="; HTTPOnly" if defined $cookie->[COOKIE_HTTPONLY];
+	$string.="; $names[COOKIE_SECURE]" if defined $cookie->[COOKIE_SECURE];				
+	$string.="; $names[COOKIE_HTTPONLY]" if defined $cookie->[COOKIE_HTTPONLY];
 
   if($store_flag){
     # If asked for storage format, give internal values
@@ -750,6 +753,50 @@ method encode_set_cookie ($cookie, $store_flag=undef){
 
 	$string;
 
+}
+
+method cookie_as_hash($cookie, $store_flag=undef){
+	my %hash=(name=>$cookie->[COOKIE_NAME], value=>$cookie->[COOKIE_VALUE]);
+
+  # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute
+  # if not defined.
+  #
+  $hash{$names[COOKIE_DOMAIN]}=scalar reverse $_ 
+    for $cookie->[COOKIE_DOMAIN]//();
+
+  # Do Attributes with needing values.  Only add them if the attribute is
+  # defined
+  #
+	for my $index (COOKIE_MAX_AGE, COOKIE_PATH, COOKIE_SAMESITE){	
+		for($cookie->[$index]//()){
+			$hash{$names[$index]}=$_;
+		}
+	}
+
+	
+  # Format date for expires. Internally the cookie structure stores this value
+  # in terms of GMT.
+  # Again only add the attribute if value is defined
+  #
+	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
+    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
+    $hash{Expires}="$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
+	}
+
+  # Do flags (attibutes with no values)
+  #
+	$hash{Secure}=1 if defined $cookie->[COOKIE_SECURE];				
+	$hash{HTTPOnly}=1 if defined $cookie->[COOKIE_HTTPONLY];
+
+  if($store_flag){
+    # If asked for storage format, give internal values
+    #
+	  $hash{"Host-Only"}=1 if defined $cookie->[COOKIE_HOST_ONLY];				
+	  $hash{"Creation-Time"}=$cookie->[COOKIE_CREATION_TIME];
+	  $hash{"Last-Access-Time"}=$cookie->[COOKIE_LAST_ACCESS_TIME];
+  }
+
+	\%hash;
 }
 
 # Returns a newly created cookie struct from a Set-Cookie string. Does not
