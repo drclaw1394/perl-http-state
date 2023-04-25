@@ -3,7 +3,7 @@ use Log::ger::Output "Screen";
 use Log::OK {
     lvl=>"info",
   };
-use HTTP::State;
+use HTTP::State qw<:encode :decode>;
 #use Cookie;
 use HTTP::CookieJar;
 use Protocol::HTTP::CookieJar;
@@ -103,8 +103,8 @@ cmpthese 1000, {
   protocol_http=>sub {
 
     for(@sample){
-      my $copy=$http_state_jar->decode_set_cookie($cookies[$_]);
-      my $hash=$http_state_jar->cookie_as_hash($copy);
+      my $copy=decode_set_cookie($cookies[$_]);
+      my $hash=hash_set_cookie($copy);
 
       $protocol_http_jar->add(delete($hash->{name}), $hash, URI::XS->new($urls[$_]));
     }

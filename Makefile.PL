@@ -1,7 +1,5 @@
 use 5.036000;
 use ExtUtils::MakeMaker;
-# See lib/ExtUtils/MakeMaker.pm for details of how to influence
-# the contents of the Makefile that is written.
 WriteMakefile(
     NAME              => 'HTTP::State',
     VERSION_FROM      => 'lib/HTTP/State.pm', 
@@ -11,7 +9,7 @@ WriteMakefile(
       "Object::Pad"=>0,
       "List::Insertion"=>0,
       "Mozilla::PublicSuffix"=>0,
-      "Date::Time"=>0,
+      "DateTime"=>0,
       "Time::Local"=>0
 
     },

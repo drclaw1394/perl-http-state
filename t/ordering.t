@@ -5,7 +5,7 @@ use Log::OK {
   lvl=>"trace"
 };
 use Test::More;
-use HTTP::State ":constants";
+use HTTP::State qw":constants :encode :decode cookie_struct";
 
 my $jar=HTTP::State->new;
 
@@ -15,7 +15,7 @@ my $name="test";
 my $value;
 
 my $url;
-my $cookie=$jar->cookie_struct(
+my $cookie=cookie_struct(
   $name=>$value,
   domain=>$domain,
   path=>$path
@@ -40,7 +40,7 @@ my $cookie=$jar->cookie_struct(
   # DEFAULT PATH
   #
   $jar->clear;
-  $cookie=$jar->cookie_struct(
+  $cookie=cookie_struct(
     $name=>$value,
     domain=>$domain,
     path=>$path
@@ -56,7 +56,7 @@ my $cookie=$jar->cookie_struct(
   # Prevent domain attribute targeting sub domains.
   #
   $jar->clear;
-  $cookie=$jar->cookie_struct(
+  $cookie=cookie_struct(
     $name=>$value,
     domain=>"a.test.example.com.au",
     path=>$path
@@ -73,7 +73,7 @@ my $cookie=$jar->cookie_struct(
   # Prevent domain attribute targeting public suffix domain
   #
   $jar->clear;
-  $cookie=$jar->cookie_struct(
+  $cookie=cookie_struct(
     $name=>$value,
     domain=>"com.au",
     path=>$path
@@ -94,14 +94,14 @@ my $cookie=$jar->cookie_struct(
   $jar->clear;
   for(qw<a b c d e>){
     $url="http://dd.$_.example.com/";
-    $cookie=$jar->cookie_struct(
+    $cookie=cookie_struct(
       name=>"my_cookie",
       domain=>"dd.$_.example.com",
     );
     $jar->set_cookies($url, $cookie);
   }
     $url="http://dd.dd.example.com/";
-    $cookie=$jar->cookie_struct(
+    $cookie=cookie_struct(
       name=>"my_cookie",
       domain=>"dd.dd.example.com",
     );
@@ -116,7 +116,7 @@ my $cookie=$jar->cookie_struct(
   #
   $jar->clear;
   $url="http://dd.dd.example.com/";
-  $cookie=$jar->cookie_struct(
+  $cookie=cookie_struct(
     name=>"my_cookie",
     domain=>"dd.dd.example.com",
   );
@@ -133,7 +133,7 @@ my $cookie=$jar->cookie_struct(
   #
   $jar->clear;
   $url="http://dd.dd.example.com/";
-  $cookie=$jar->cookie_struct(
+  $cookie=cookie_struct(
     name=>"my_cookie",
     domain=>"dd.dd.example.com",
   );

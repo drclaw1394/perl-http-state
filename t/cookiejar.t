@@ -7,7 +7,7 @@ use Log::ger::Output "Screen";
 use Log::OK {
   lvl=>"info"
 };
-use HTTP::State qw|:constants|;
+use HTTP::State qw|:constants :encode :decode cookie_struct|;
 
 use Test::More;
 
@@ -23,7 +23,7 @@ ok $jar, "created ok";
 # Create a cookie 'sent from the server'
 #
 
-my $cookie=$jar->cookie_struct(
+my $cookie=cookie_struct(
   some_name=>"some_value",
   COOKIE_HTTPONLY, 1,
   COOKIE_MAX_AGE, 10
@@ -35,14 +35,14 @@ ok $cookie, "created cookie";
 my $request_url="http://site.com.au/path/goes/here.pdf";
 
 
-my $string=$jar->encode_set_cookie($cookie);
+my $string=encode_set_cookie($cookie);
 
 ok $string=~/some_name=some_value/, "set cookie encode";
 
 say STDERR $string;
 $jar->set_cookies($request_url, $string);
 
-$cookie=$jar->cookie_struct(
+$cookie=cookie_struct(
   some_other_name=>"some_value2",
   httponly=>1,
   "max-age"=>2
@@ -55,7 +55,7 @@ $jar->set_cookies($request_url, $cookie);
 say STDERR "++++++++";
 
 
-$cookie=$jar->cookie_struct(
+$cookie=cookie_struct(
   temp=>"some_value2",
   COOKIE_HTTPONLY, 1,
 );
