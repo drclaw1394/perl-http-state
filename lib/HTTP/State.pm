@@ -15,7 +15,7 @@ use builtin qw<trim>;
 
 # Debug
 #
-use Data::Dumper;
+#use Data::Dumper;
 
 my @names;
 my @months = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
@@ -83,7 +83,7 @@ use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_K
 use Mozilla::PublicSuffix qw<public_suffix>;
 
 # Date 
-use DateTime;
+use Time::Piece;
 use Time::Local qw<timegm_modern>;
 
 # Exports
@@ -99,6 +99,7 @@ our @EXPORT_OK=(
   "cookie_struct",
   "hash_set_cookie"
 );
+
 our %EXPORT_TAGS=(
   "constants"=>[keys %const_names],      
   "encode"=>["encode_set_cookie", "hash_set_cookie"],
@@ -106,14 +107,7 @@ our %EXPORT_TAGS=(
   "all"=>[@EXPORT_OK]
 );
 
-my $tz_offset;
-{
-   # Calculate timezone offset from GMT
-  our $LocalTZ = DateTime::TimeZone->new( name => 'local' );
-  my $d1=DateTime->from_epoch(epoch=>0, time_zone=>"GMT");
-  my $d2=DateTime->from_epoch(epoch=>0, time_zone=>$LocalTZ);
-  $tz_offset=($d2->offset-$d1->offset);
-}
+my $tz_offset=Time::Piece->localtime->tzoffset;
 
 sub cookie_struct {
 
@@ -528,7 +522,6 @@ method set_cookies($request_uri, @cookies){
     # set default path  as per 5.1.4
     #
     $c->[COOKIE_PATH]//="";
-    Log::OK::TRACE and log_trace "Set cookie path is ".  Dumper $c;
     if( length($c->[COOKIE_PATH])==0 or  substr($c->[COOKIE_PATH], 0, 1) ne "/"){
       # Calculate default
       if(length($path)==0 or substr($path, 0, 1 ) ne "/"){
@@ -707,7 +700,6 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
     my $index=search_string_left $sld, \@_cookies;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
-    Log::OK::TRACE and log_trace Dumper \@_cookies;
     Log::OK::TRACE and log_trace  "looking for host: $sld";
 
     while( $index<@_cookies){
@@ -745,7 +737,6 @@ method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
       # expiry immediately. the $any_name flag allows all cookies for a domain to
       # be extracted
       #
-      Log::OK::TRACE and log_trace __PACKAGE__. " cookie:". Dumper $_;
       if($any_name or $_->[COOKIE_NAME] eq $name){
         # Found a matching cookie.
         Log::OK::TRACE and log_trace "NAME OK";
