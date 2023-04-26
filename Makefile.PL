@@ -9,7 +9,6 @@ WriteMakefile(
       "Object::Pad"=>0,
       "List::Insertion"=>0,
       "Mozilla::PublicSuffix"=>0,
-      "DateTime"=>0,
       "Time::Local"=>0
 
     },
