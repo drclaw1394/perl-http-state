@@ -1,0 +1,186 @@
+=head1 NAME
+
+HTTP::State -  Cookies and Jars
+
+
+=head1 SYNOPSIS
+
+Importing:
+
+  use HTTP::State
+  
+  # Create a cookie jar
+  my $jar=uSAC::HTTP->new;
+
+Set/Update Cookies:
+
+  # Create a cookie struct from KV pairs
+  my $cs1=$jar->cookie_struct(name=>value, attributes)
+  my $cs2=$jar->cookie_struct(name=>value, attributes)
+
+  # Set cookies for the requested url
+  my $url="http://test.example.com";
+  $jar->set_cookies($url,$cs1, $cs2);
+
+  # Also supports adding encoded Set-Cookie header strings directly
+  my $string1="name1=value; Max-Age=3600; Secure; SameSite=Lax";
+  my $string2="name2=value; Max-Age=3600; Secure; SameSite=Lax";
+  $jar->set_cookies($url, $string1, $string2);
+ 
+
+Get/Encode Cookies:
+
+  # Using cookies in the jar
+
+  my $url="http://www.mysite.com";
+  my $referer="http://thirdparty.site.com";
+  my $action= "top";      # Top level navigation 
+
+  # Encodes cookie name and values from cookies processed according to
+  # RFC6265bis 
+
+  my $string=$jar->encode_cookies($url, $referer, $action);
+
+  # Or get the kv pairs instead of encoded string
+  my @kv=$jar->get_kv_cookies($url, $referer, $action);
+
+  # Or get copies of structures 
+  my @cookie_structs=$jar->get_cookies($url, $referer, $action);
+
+Server Side:
+
+  # Encode a Set-Cookie header value
+
+  my $struct=$jar->cookie_struct(name=>"value", Secure=>1, HTTPOnly=>1, Path=>"/");
+  my $string=$jar->encode_set_cookie($struct);
+
+
+=head1 DESCRIPTION
+
+
+The 'standards' around cookies and how web browsers process them are always
+changing. This module brings upto date processing and an alternative
+implementation of a Cookie and Cookie Jar to manage HTTP State:
+
+=over
+
+=item 
+
+=item samesite context processing (RFC-6265bis)
+
+=item public suffix checking (RFC-6265bis)
+
+=item prefix cookie name processing. (RFC-6265bis)
+
+=item Upper limit of cookie expiry dates like the (Chrome browser)
+
+=back
+
+
+It order you most of these enhanced features, your user agent needs to
+participate by providing more information about 'actions' and context or
+'referer'.  However in the case you just need a cookie jar in your existing
+project, it is also backward compatiable with L<LWP> and L<HTTP::Tiny>
+interfaces that don't support these concepts just yet.
+
+
+As cookies are subject to many conditions before their values can be used in a
+useragent, they are treated as an opaque structure. As such manipulations of
+the cookie (get, set, encoding, decoding, etc) are done through instantiated
+C<HTTP::State> object instead of a standalone object interface on a cookie.
+
+
+Mozilla::PublicSuffix use for public suffix database but default. Please refer documentaiton on updating. only loaded on demand to lower memory.
+User can supply their own sub to perform public suffix lookup.
+
+
+=head3 PERFORMANCE
+
+
+
+
+=head1 API
+
+=head2 Cookies
+
+Cookies in this module are represented as structures and not classes.  This
+means encoding and decoding cookies is via a C<HTTP::State> (cookie jar) object
+and not directly on the cookie strucure. This provides numerous runtime
+benefits with little downside.
+
+
+=head3 cookie_struct
+
+Create a cookie structure. The return is suitable for encode_set_cookie, or
+set_cookies. 
+
+Takes a list of kv properties. The keys are either string names or fields or
+the constants for the fields. 
+
+The first pair of items is always the cookie name and the cookie value. 
+
+Subsequent attributes fields can be in any order.
+
+The first attibute keys is checked to see if its an attribute name (string) or
+a integer constant. The remaining field keys are assumed to be of the same
+perswasion 
+
+Normalizes expiry time if set, to GMT.
+
+=head3 set_cookies
+
+Takes Set-Cookie header string values or cookie_struct and inserts them into
+the cookie storage jar for the supplied url.
+
+If path and domain attributes are calculated as per rfc 6525
+
+
+=head3 get_cookies
+
+Returns copies of matched cookies structs for further serialization or
+processing.
+
+=head3 get_kv_cookies
+
+Return the matching cookie values as a key value list
+
+=cut
+
+=head3 encode_cookies
+
+Encodes all matching cookies for the current context into a Cookie header
+string
+
+
+
+=head3 decode_cookie
+
+Parses the Key value pairs from a Cookie header string. Convertes to a KV list
+
+
+=head3 slurp_set_cookies
+
+Reads in previously spurted cookie strings from a file.  Tests incomming
+cookies for expiry or parsing errors.  Does not processs as normal set_cookie
+
+Cookies are processed and sorted as they are read in to reduce memory requirements.
+
+
+=head3 spurt_set_cookies
+
+Writes out the contents of the database as set cookie strings, with additional
+internal fields included.  Ignores any expired or session cookies
+
+
+=head3 suffix
+
+Wrapper around the public suffix sub. Caches results for fast subsequent
+lookups. Looks up a public suffix for a given domain
+
+
+=head3 second_level_domain
+
+Like C<suffix> but returns suffix with the next level down. 
+Returns the highest domain which can be set by a (sub) domain, that isn't a top
+level domain/public suffix
+
