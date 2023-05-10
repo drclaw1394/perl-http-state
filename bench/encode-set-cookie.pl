@@ -13,7 +13,7 @@ use Data::Dumper;
 
 my $origin_count=1000;#$ARGV[0]//1;
 my $path_count=1000;
-my $cookie_count=100;
+my $cookie_count=1000;
 my $name="name";
 my $value="some string goes here";
 
@@ -130,30 +130,34 @@ cmpthese 1000, {
       push $results[0]->@*, $string;
     }
   },
-  http_cookiejar=>sub {
-    for(@samples){
-      my $string=$http_cookiejar->cookie_header($urls[$_]);
-      #say "http_cookiejar: ".$string if $string;
-      push $results[1]->@*, $string;
-    }
-  },
+  #############################################################
+  # http_cookiejar=>sub {                                     #
+  #   for(@samples){                                          #
+  #     my $string=$http_cookiejar->cookie_header($urls[$_]); #
+  #     #say "http_cookiejar: ".$string if $string;           #
+  #     push $results[1]->@*, $string;                        #
+  #   }                                                       #
+  # },                                                        #
+  #############################################################
 
-  protocol_http=>sub {
-    for(@samples){
-      my $array=$protocol_http_jar->find(URI::XS->new($urls[$_]));
-      #say "size : ". scalar @$array;
-      #say "http_cookiejar: ".$string if $string;
-      if(keys $array->[0]->%*){
-        #say "domain :$_->{domain} path : $_->{path} name: $_->{name}" for @$array;
-        my $string= join "; ", map "$_->{name}=$_->{value}", $array->[0];
-        #say "protocol_http: ".$string;
-        push $results[2]->@*, $string;
-      }
-      else{
-        push $results[2]->@*, "";
-      }
-    }
-  }
+  #####################################################################################
+  # protocol_http=>sub {                                                              #
+  #   for(@samples){                                                                  #
+  #     my $array=$protocol_http_jar->find(URI::XS->new($urls[$_]));                  #
+  #     #say "size : ". scalar @$array;                                               #
+  #     #say "http_cookiejar: ".$string if $string;                                   #
+  #     if(keys $array->[0]->%*){                                                     #
+  #       #say "domain :$_->{domain} path : $_->{path} name: $_->{name}" for @$array; #
+  #       my $string= join "; ", map "$_->{name}=$_->{value}", $array->[0];           #
+  #       #say "protocol_http: ".$string;                                             #
+  #       push $results[2]->@*, $string;                                              #
+  #     }                                                                             #
+  #     else{                                                                         #
+  #       push $results[2]->@*, "";                                                   #
+  #     }                                                                             #
+  #   }                                                                               #
+  # }                                                                                 #
+  #####################################################################################
 
 };
 my $ok=1;

@@ -90,6 +90,10 @@ the cookie (get, set, encoding, decoding, etc) are done through instantiated
 C<HTTP::State> object instead of a standalone object interface on a cookie.
 
 
+Mozilla::PublicSuffix use for public suffix database but default. Please refer documentaiton on updating. only loaded on demand to lower memory.
+User can supply their own sub to perform public suffix lookup.
+
+
 =head3 PERFORMANCE
 
 

@@ -80,7 +80,7 @@ use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_K
 
 # Public suffix list list
 #
-use Mozilla::PublicSuffix qw<public_suffix>;
+#use Mozilla::PublicSuffix qw<public_suffix>;
 
 # Date 
 use Time::Piece;
@@ -346,14 +346,15 @@ field @_domain;         #list of [dk, dv ] structure sorted by dk
 field %_sld_cache;
   
 BUILD{
-  unless($_public_suffix_sub){
-    require Mozilla::PublicSuffix;
-    $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
-  }
 }
 
 
 method second_level_domain{
+    unless($_public_suffix_sub){
+      require Mozilla::PublicSuffix;  
+      $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
+    }
+
     #search for  prefix 
     my $domain=lc $_[0];
     my $highest;
@@ -373,6 +374,10 @@ method second_level_domain{
 }
 
 method suffix{
+  unless($_public_suffix_sub){
+    require Mozilla::PublicSuffix;
+    $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
+  }
   $_suffix_cache
     ? $_suffix_cache->{lc $_[0]}//=&$_public_suffix_sub
     : &$_public_suffix_sub;
