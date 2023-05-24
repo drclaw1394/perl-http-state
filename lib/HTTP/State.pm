@@ -153,9 +153,12 @@ sub cookie_struct {
 
 
 sub decode_cookies {
-  my @values= map trim $_,            #trim leading /trailing white space 
+  no warnings "experimental";
+  my @values= map trim($_),            #trim leading /trailing white space 
               map split("=", $_, 2),  #Split files into  KV pairs
-              split /;\s*/, $_[0];    #Split input into fields
+              split /;\s*/, ref($_[0])
+                ?join("; ", $_[0]->@*)
+                : $_[0];    #Split input into fields
 	@values;
 }
 
