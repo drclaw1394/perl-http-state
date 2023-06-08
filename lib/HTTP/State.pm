@@ -11,65 +11,11 @@ our $VERSION="v0.1.0";
 use Log::ger; 
 use Log::OK;
 
-use builtin qw<trim>;
-
-# Debug
-#
-#use Data::Dumper;
-
-my @names;
-my @months = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
-my $i=0;
-my %months= map {$_,$i++} @months;
-
-my $i=0;
-my @days= qw(Sun Mon Tue Wed Thu Fri Sat);
-my %days= map {$_,$i++} @days;
-my %const_names;
-
-my @values;
-
-BEGIN {
-	@names=qw<
-		Undef
-		Name
-		Value
-		Expires
-		Max-Age
-		Domain
-		Path
-		Secure
-		HTTPOnly
-		SameSite
-    
-    Creation-Time
-    Last-Access-Time
-    Persistent
-    Host-Only
-    Key
-
-	>;
-	@values= 0 .. @names-1;
-
-	my @same_site=qw<Lax Strict None>;
-
-	my @pairs=
-		(map { (("COOKIE_".uc $names[$_])=~tr/-'/_/r, $values[$_]) } 0..@names-1),	#elements
-		(map {("SAME_SITE_".uc, $_)} @same_site)						#same site vals
-	;						
-
-	%const_names=@pairs;
-}
-
-
-use constant \%const_names;
-
-my %reverse; @reverse{map lc, @names}=@values;
-$reverse{undef}=0;			#catching
-
 # Object system. Will use feature class asap
 #
 use Object::Pad;
+
+use HTTP::State::Cookie ":all";
 
 
 
@@ -86,251 +32,11 @@ use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_K
 use Time::Piece;
 use Time::Local qw<timegm_modern>;
 
-# Exports
-use Exporter qw(import);
-
-
-our @EXPORT_OK=(
-  keys(%const_names),
-  "encode_set_cookie",      #encodes a standalone cookie struct
-  "decode_set_cookie",      #decodes a string into a cookie struct
-  "decode_cookies",          #decodes a strin of kv cookie pairs into an array
-                            # NOTE encoding a cookie is via a cookie jar object
-  "cookie_struct",
-  "hash_set_cookie"
-);
-
-our %EXPORT_TAGS=(
-  "constants"=>[keys %const_names],      
-  "encode"=>["encode_set_cookie", "hash_set_cookie"],
-  "decode"=>["decode_set_cookie", "decode_cookies"],
-  "all"=>[@EXPORT_OK]
-);
-
 my $tz_offset=Time::Piece->localtime->tzoffset;
-
-sub cookie_struct {
-
-  no warnings "experimental";
-  my @c;
-  
-  $c[0]=1;
-
-	$c[COOKIE_NAME]=shift;
-	$c[COOKIE_VALUE]=shift;
-
-  die "Cookie must have a name" unless $c[COOKIE_NAME];
-
-  no warnings "uninitialized";
-  no warnings "numeric";
-
-  if($c[$_[0]]){
-    # anticipate keys provided as string.
-    for my ($k, $v)(@_){
-
-      $c[$reverse{lc $k}]=$v;
-    }
-
-  }
-  else{
-    # keys assumed to be integer constants
-    for my ($k, $v)(@_){
-      $c[$k]=$v;
-    }
-  }
-
-  $c[COOKIE_EXPIRES]-=$tz_offset if defined $c[COOKIE_EXPIRES];
-  $c[COOKIE_DOMAIN]=scalar reverse $c[COOKIE_DOMAIN] if $c[COOKIE_DOMAIN];
-
-  # Remove any extra fields added in haste
-  #
-  #splice @c, COOKIE_KEY+1;
-
-  \@c;
-}
-
-
-
-
-sub decode_cookies {
-  no warnings "experimental";
-  my @values= map trim($_),            #trim leading /trailing white space 
-              map split("=", $_, 2),  #Split files into  KV pairs
-              split /;\s*/, ref($_[0])
-                ?join("; ", $_[0]->@*)
-                : $_[0];    #Split input into fields
-	@values;
-}
-
-# Returns a newly created cookie struct from a Set-Cookie string. Does not
-# validate or create default values of attributess. Only processes what is
-# given
-#
-sub decode_set_cookie{
-  no warnings "experimental";
-  # $string, converter
-	my $key;
-	my $value;
-	my @values;
-	my $first=1;
-  my @fields=split /;\s*/, $_[0];
-  #Value needs to be the first field 
-	my $count=($values[1], $values[2])=split "=", shift(@fields), 2;
-
-  #If no key value pair the forget it
-  return undef if $count!=2;
-
-  # trip whitespace
-  $values[1]=trim($values[1]);
-  $values[2]=trim($values[2]);
-
-  #If the name is not present forget it
-  return unless $values[1]; 
-  
-
-	for(@fields){
-
-		($key, $value)=split "=", $_, 2;
-
-    $key=trim($key);
-    $value=trim($value) if $value;
-
-    # Attributes are processed with case insensitive names
-    #
-    $key=lc $key;
-
-    # Look up the value key value pair
-    # unkown values are stored in the undef => 0 position
-    $values[$reverse{$key}]=$value//1;
-	}
-
-  # nuke unkown value
-  $values[0]=undef;
-
-
-  # Fix the date. Date is stored in seconds internally
-  #
-  for($values[COOKIE_EXPIRES]//()){
-    my ($wday_key, $mday, $mon_key, $year, $hour, $min, $sec, $tz)=
-     /([^,]+), (\d+)\-([^-]{3})\-(\d{4}) (\d+):(\d+):(\d+) (\w+)/;
-
-    if(70<=$year<=99){
-      $year+=1900;
-    }
-    elsif(0<=$year<=69){
-      $year+=2000;
-    }
-    else{
-      #year as is
-    }
-    $_ = timegm_modern($sec, $min, $hour, $mday, $months{$mon_key}, $year);
-  }
-
-
-  for($values[COOKIE_DOMAIN]//()){
-    s/\.$//;
-    s/^\.//;
-    $_ = scalar reverse $_;
-  }
-
-  \@values;
-}
 
 # Encode matching cooki into a cookie string
 use feature "signatures";
 
-sub encode_set_cookie ($cookie, $store_flag=undef){
-	Log::OK::DEBUG and log_debug "Serializing set cookie";	
-
-  # Start with name and value
-  #
-	my $string= "$cookie->[COOKIE_NAME]=".($cookie->[COOKIE_VALUE]//"");			
-
-  # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute
-  # if not defined.
-  #
-  $string.= "; $names[COOKIE_DOMAIN]=".scalar reverse $_ 
-    for $cookie->[COOKIE_DOMAIN]//();
-
-  # Do Attributes with needing values.  Only add them if the attribute is
-  # defined
-  #
-	for my $index (COOKIE_MAX_AGE, COOKIE_PATH, COOKIE_SAMESITE){	
-		for($cookie->[$index]//()){
-			$string.="; $names[$index]=$_";
-		}
-	}
-
-	
-  # Format date for expires. Internally the cookie structure stores this value
-  # in terms of GMT.
-  # Again only add the attribute if value is defined
-  #
-	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $string.="; $names[COOKIE_EXPIRES]=$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
-	}
-
-  # Do flags (attibutes with no values)
-  #
-	$string.="; $names[COOKIE_SECURE]" if defined $cookie->[COOKIE_SECURE];				
-	$string.="; $names[COOKIE_HTTPONLY]" if defined $cookie->[COOKIE_HTTPONLY];
-
-  if($store_flag){
-    # If asked for storage format, give internal values
-    #
-	  $string.="; Host-Only" if defined $cookie->[COOKIE_HOST_ONLY];				
-	  $string.="; Creation-Time=$cookie->[COOKIE_CREATION_TIME]";
-	  $string.="; Last-Access-Time=$cookie->[COOKIE_LAST_ACCESS_TIME]";
-  }
-
-	$string;
-
-}
-
-sub hash_set_cookie($cookie, $store_flag=undef){
-	my %hash=(name=>$cookie->[COOKIE_NAME], value=>$cookie->[COOKIE_VALUE]);
-
-  # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute
-  # if not defined.
-  #
-  $hash{$names[COOKIE_DOMAIN]}=scalar reverse $_ 
-    for $cookie->[COOKIE_DOMAIN]//();
-
-  # Do Attributes with needing values.  Only add them if the attribute is
-  # defined
-  #
-	for my $index (COOKIE_MAX_AGE, COOKIE_PATH, COOKIE_SAMESITE){	
-		for($cookie->[$index]//()){
-			$hash{$names[$index]}=$_;
-		}
-	}
-
-	
-  # Format date for expires. Internally the cookie structure stores this value
-  # in terms of GMT.
-  # Again only add the attribute if value is defined
-  #
-	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $hash{Expires}="$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
-	}
-
-  # Do flags (attibutes with no values)
-  #
-	$hash{Secure}=1 if defined $cookie->[COOKIE_SECURE];				
-	$hash{HTTPOnly}=1 if defined $cookie->[COOKIE_HTTPONLY];
-
-  if($store_flag){
-    # If asked for storage format, give internal values
-    #
-	  $hash{"Host-Only"}=1 if defined $cookie->[COOKIE_HOST_ONLY];				
-	  $hash{"Creation-Time"}=$cookie->[COOKIE_CREATION_TIME];
-	  $hash{"Last-Access-Time"}=$cookie->[COOKIE_LAST_ACCESS_TIME];
-  }
-
-	\%hash;
-}
 
 
 
@@ -348,10 +54,6 @@ field @_domain;         #list of [dk, dv ] structure sorted by dk
                         # pv is array of [cn, ca] which is sorted by cn
 field %_sld_cache;
   
-BUILD{
-}
-
-
 method second_level_domain{
     unless($_public_suffix_sub){
       require Mozilla::PublicSuffix;  
@@ -868,7 +570,7 @@ method get_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef)
 }
 
 
-method encode_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
+method encode_request_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
   my $cookies=$self->_get_cookies($request_uri, $referer_uri, $action, $name);
   return "" unless @$cookies;
   join "; ", map { "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]"} @$cookies;

@@ -9,11 +9,24 @@ WriteMakefile(
       "Object::Pad"=>0,
       "List::Insertion"=>0,
       "Mozilla::PublicSuffix"=>0,
-      "Time::Local"=>0
-
     },
 
     ABSTRACT_FROM     => 'lib/HTTP/State.pod', 
     AUTHOR            => 'Ruben Westerberg <drclaw@mac.com>',
     LICENSE           => 'mit',
+
+
+    META_ADD => {
+      "meta-spec" => {
+        version => 2
+      },
+      resources=> {
+        repository =>{
+          type => "git",
+          url => "git://github.com/drclaw1394/perl-http-state.git",
+          web => "http://github.com/drclaw1394/perl-http-state",
+        }
+      }
+    }
+
 );

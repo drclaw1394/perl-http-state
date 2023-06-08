@@ -1,11 +1,13 @@
 use strict;
 use feature ":all";
-use Log::ger::Output "Screen";
+#use Log::ger::Output "Screen";
 use Log::OK {
-  lvl=>"trace"
+  lvl=>"fatal"
 };
+
 use Test::More;
-use HTTP::State qw":constants :encode :decode cookie_struct";
+use HTTP::State::Cookie qw":constants :encode :decode cookie_struct";
+use HTTP::State;
 
 my $jar=HTTP::State->new;
 
@@ -31,8 +33,9 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url, $cookie);
   my $encoded=$jar->dump_cookies;
   
-  # no domain set use the url as default
+  # no domain set so use the url as default
   ok $encoded=~/Domain=test\.example\.com\.au/, "Default domain";
+  # No path set
   ok $encoded=~/Path=\//, "Default path";
 }
 
@@ -46,10 +49,10 @@ my $cookie=cookie_struct(
     path=>$path
   );
   my $url="http://test.example.com.au/my/path/here/da.pdf";
-  $jar->set_cookies($url,$cookie);
+  $jar->set_cookies($url, $cookie);
 
   my $encoded=$jar->dump_cookies;
-  say STDERR $encoded;
+  #say STDERR $encoded;
   ok  $encoded=~/Path=\/my\/path\/here/, "Default Path. Upto right most /";
 }
 {
@@ -63,10 +66,10 @@ my $cookie=cookie_struct(
   );
   
   $url="http://test.example.com.au/my/path/here/da.pdf";
-  $jar->set_cookies($url,$cookie);
+  $jar->set_cookies($url, $cookie);
 
   my $encoded=$jar->dump_cookies;
-  say STDERR $encoded;
+  #say STDERR $encoded;
   ok $encoded eq "", "Attempt sub domain cookie set";
 }
 {
@@ -83,7 +86,7 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url,$cookie);
 
   my $encoded=$jar->dump_cookies;
-  say STDERR $encoded;
+  #say STDERR $encoded;
   ok $encoded eq "", "Ignore Attempt public domain cookie set";
 }
 
@@ -141,11 +144,11 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url, $cookie);
   my $db=$jar->db;
   my $time=$db->[0][COOKIE_CREATION_TIME];
-  say STDERR $time;
+  #say STDERR $time;
   sleep 1;
   
   $jar->set_cookies($url, $cookie);
-  say STDERR join ", ", @$db;
+  #say STDERR join ", ", @$db;
   ok @$db==1, "Count ok";
 
   my $new_time=$db->[0][COOKIE_CREATION_TIME];

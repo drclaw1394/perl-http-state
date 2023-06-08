@@ -1,0 +1,14 @@
+Changes
+lib/HTTP/State.pm
+lib/HTTP/State.pod
+lib/HTTP/State/Cookie.pm
+LICENSE
+Makefile.PL
+MANIFEST			This list of files
+MANIFEST.SKIP
+nytprof.out
+README
+t/cookiejar.t
+t/HTTP-State.t
+t/ordering.t
+test.cookie.jar

@@ -3,11 +3,12 @@ use warnings;
 use feature ":all";
 use Data::Dumper;
 use Log::ger;
-use Log::ger::Output "Screen";
+#use Log::ger::Output "Screen";
 use Log::OK {
   lvl=>"info"
 };
-use HTTP::State qw|:constants :encode :decode cookie_struct|;
+use HTTP::State::Cookie qw|:constants :encode :decode cookie_struct|;
+use HTTP::State;
 
 use Test::More;
 
@@ -39,7 +40,6 @@ my $string=encode_set_cookie($cookie);
 
 ok $string=~/some_name=some_value/, "set cookie encode";
 
-say STDERR $string;
 $jar->set_cookies($request_url, $string);
 
 $cookie=cookie_struct(
@@ -50,9 +50,7 @@ $cookie=cookie_struct(
   #COOKIE_MAX_AGE, 2
 );
 
-say STDERR "++++++++";
 $jar->set_cookies($request_url, $cookie);
-say STDERR "++++++++";
 
 
 $cookie=cookie_struct(
@@ -61,32 +59,22 @@ $cookie=cookie_struct(
 );
 $jar->set_cookies($request_url, $cookie);
 
-say STDERR "DUMPING COOKIES";
-say STDERR $jar->dump_cookies;
 
 
 
 
-say STDERR "++++++++";
 $cookie->[COOKIE_VALUE]="NEW ZVALUE";
 
 #$jar->set_cookies($request_url,$cookie);
-say STDERR "++++++++";
 
 my $header=$jar->encode_cookies($request_url);
-say STDERR Dumper $header;
-say STDERR Dumper $jar->get_kv_cookies($request_url);
 
-say STDERR "DUMPING COOKIES";
-say STDERR $jar->dump_cookies;
 
 $jar->spurt_set_cookies("test.cookie.jar");
 
-say STDERR "Slurped";
 my $jar2=HTTP::State->new;
 
 $jar2->slurp_set_cookies("test.cookie.jar");
-say STDERR $jar2->dump_cookies;
 
 
 
