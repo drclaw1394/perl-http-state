@@ -1,66 +1,62 @@
 =head1 NAME
 
-HTTP::State -  Cookies and Jars
+HTTP::State - Cookie (Jar) State for HTTP Clients
 
 
 =head1 SYNOPSIS
 
-Importing:
+Importing and creating a Jar
 
-  use HTTP::State
-  
-  # Create a cookie jar
-  my $jar=uSAC::HTTP->new;
+  use HTTP::State;          
 
-Set/Update Cookies:
+  my $jar=HTTP::State->new;
 
-  # Create a cookie struct from KV pairs
-  my $cs1=$jar->cookie_struct(name=>value, attributes)
-  my $cs2=$jar->cookie_struct(name=>value, attributes)
 
-  # Set cookies for the requested url
-  my $url="http://test.example.com";
-  $jar->set_cookies($url,$cs1, $cs2);
+Add cookies from set_cookies strings into jar:
 
-  # Also supports adding encoded Set-Cookie header strings directly
   my $string1="name1=value; Max-Age=3600; Secure; SameSite=Lax";
   my $string2="name2=value; Max-Age=3600; Secure; SameSite=Lax";
+
   $jar->set_cookies($url, $string1, $string2);
+
+
+Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
+
+  # Structures and function for cookies
+  use HTTP::State::Cookie;
+  my $cs1=cookie_struct(name=>"value");
+  my $cs2=cookie_struct(name=>"value");
+
+  my $request_url="http://test.example.com";
+  $jar->set_cookies($request_url, $cs1, $cs2);
  
 
-Get/Encode Cookies:
+Lookup and Encoding Cookies (for sending to server)
 
-  # Using cookies in the jar
-
-  my $url="http://www.mysite.com";
+  my $request_url="http://www.mysite.com";
   my $referer="http://thirdparty.site.com";
+
   my $action= "top";      # Top level navigation 
 
   # Encodes cookie name and values from cookies processed according to
   # RFC6265bis 
 
-  my $string=$jar->encode_cookies($url, $referer, $action);
+  my $string=$jar->encode_request_cookies($url, $referer, $action);
 
-  # Or get the kv pairs instead of encoded string
+Lookup and return Key value pairs (client side)
+
   my @kv=$jar->get_kv_cookies($url, $referer, $action);
 
-  # Or get copies of structures 
+Lookup and return copies of cookie structures 
+
   my @cookie_structs=$jar->get_cookies($url, $referer, $action);
 
-Server Side:
-
-  # Encode a Set-Cookie header value
-
-  my $struct=$jar->cookie_struct(name=>"value", Secure=>1, HTTPOnly=>1, Path=>"/");
-  my $string=$jar->encode_set_cookie($struct);
 
 
 =head1 DESCRIPTION
 
-
-The 'standards' around cookies and how web browsers process them are always
-changing. This module brings upto date processing and an alternative
-implementation of a Cookie and Cookie Jar to manage HTTP State:
+This module brings upto date processing and an alternative implementation of a
+Cookie Jar to manage HTTP State. It features:
 
 =over
 
@@ -76,37 +72,22 @@ implementation of a Cookie and Cookie Jar to manage HTTP State:
 
 =back
 
+It order you most of these enhanced features, your user agent or client side
+program needs to 'opt in' by providing more information about 'actions' and
+'context' of a request.
 
-It order you most of these enhanced features, your user agent needs to
-participate by providing more information about 'actions' and context or
-'referer'.  However in the case you just need a cookie jar in your existing
-project, it is also backward compatiable with L<LWP> and L<HTTP::Tiny>
-interfaces that don't support these concepts just yet.
+However if you just need a fast cookie jar an existing project, it is also
+backward compatiable with L<LWP> and L<HTTP::Tiny> interfaces that don't
+support these concepts just yet.
 
-
-As cookies are subject to many conditions before their values can be used in a
-useragent, they are treated as an opaque structure. As such manipulations of
-the cookie (get, set, encoding, decoding, etc) are done through instantiated
-C<HTTP::State> object instead of a standalone object interface on a cookie.
-
-
-Mozilla::PublicSuffix use for public suffix database but default. Please refer documentaiton on updating. only loaded on demand to lower memory.
-User can supply their own sub to perform public suffix lookup.
+Mozilla::PublicSuffix is used for public suffix database and is only loaded
+when actuall required.
 
 
 =head3 PERFORMANCE
 
-
-
-
 =head1 API
 
-=head2 Cookies
-
-Cookies in this module are represented as structures and not classes.  This
-means encoding and decoding cookies is via a C<HTTP::State> (cookie jar) object
-and not directly on the cookie strucure. This provides numerous runtime
-benefits with little downside.
 
 
 =head3 cookie_struct
@@ -183,4 +164,26 @@ lookups. Looks up a public suffix for a given domain
 Like C<suffix> but returns suffix with the next level down. 
 Returns the highest domain which can be set by a (sub) domain, that isn't a top
 level domain/public suffix
+
+
+=head1 COMPARISON TO OTHER MODULES
+
+
+=head1 AUTHOR
+
+Ruben Westerberg, E<lt>drclaw@mac.comE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2023 by Ruben Westerberg
+
+Licensed under MIT
+
+=head1 DISCLAIMER OF WARRANTIES
+
+THIS PACKAGE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.
+
+=cut
 

@@ -3,7 +3,8 @@ use Log::ger::Output "Screen";
 use Log::OK {
     lvl=>"info",
   };
-use HTTP::State qw<:encode :decode>;
+use HTTP::State::Cookie qw<:encode :decode>;
+use HTTP::State;
 #use Cookie;
 use HTTP::CookieJar;
 use Protocol::HTTP::CookieJar;
@@ -161,7 +162,7 @@ cmpthese 1000, {
 
 };
 my $ok=1;
-
+exit;
 say "Found ".$results[0]->@*." cookies";
 for(0..$results[0]->@*-1){
   my $ok=($results[0][$_] eq $results[1][$_]);

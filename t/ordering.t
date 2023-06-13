@@ -1,9 +1,5 @@
 use strict;
-use feature ":all";
-#use Log::ger::Output "Screen";
-use Log::OK {
-  lvl=>"fatal"
-};
+use warnings;
 
 use Test::More;
 use HTTP::State::Cookie qw":constants :encode :decode cookie_struct";
@@ -52,7 +48,6 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url, $cookie);
 
   my $encoded=$jar->dump_cookies;
-  #say STDERR $encoded;
   ok  $encoded=~/Path=\/my\/path\/here/, "Default Path. Upto right most /";
 }
 {
@@ -69,7 +64,6 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url, $cookie);
 
   my $encoded=$jar->dump_cookies;
-  #say STDERR $encoded;
   ok $encoded eq "", "Attempt sub domain cookie set";
 }
 {
@@ -86,7 +80,6 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url,$cookie);
 
   my $encoded=$jar->dump_cookies;
-  #say STDERR $encoded;
   ok $encoded eq "", "Ignore Attempt public domain cookie set";
 }
 
@@ -144,11 +137,9 @@ my $cookie=cookie_struct(
   $jar->set_cookies($url, $cookie);
   my $db=$jar->db;
   my $time=$db->[0][COOKIE_CREATION_TIME];
-  #say STDERR $time;
   sleep 1;
   
   $jar->set_cookies($url, $cookie);
-  #say STDERR join ", ", @$db;
   ok @$db==1, "Count ok";
 
   my $new_time=$db->[0][COOKIE_CREATION_TIME];

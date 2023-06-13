@@ -1,12 +1,16 @@
+use strict;
+use warnings;
 package HTTP::State::Cookie;
 # Logging
 #
 use Log::ger; 
 use Log::OK;
 
+
 use Exporter "import";
 
 use feature qw"say signatures";
+use Data::Dumper;
 use builtin qw<trim>;
 
 
@@ -14,7 +18,7 @@ my @months = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 my $i=0;
 my %months= map {$_,$i++} @months;
 
-my $i=0;
+$i=0;
 my @days= qw(Sun Mon Tue Wed Thu Fri Sat);
 my %days= map {$_,$i++} @days;
 
@@ -71,11 +75,13 @@ our @EXPORT_OK=(
 );
 
 our %EXPORT_TAGS=(
-  "constants"=>[keys %const_names],      
-  "encode"=>["encode_set_cookie", "encode_cookies", "hash_set_cookie"],
-  "decode"=>["decode_set_cookie", "decode_cookies"],
+  "constants"=>["cookie_struct", keys %const_names],      
+  "encode"=>["cookie_struct", "encode_set_cookie", "encode_cookies", "hash_set_cookie"],
+  "decode"=>["cookie_struct", "decode_set_cookie", "decode_cookies"],
   "all"=>[@EXPORT_OK]
 );
+
+our @EXPORT=("cookie_struct");
 
 
 
@@ -143,28 +149,60 @@ sub decode_cookies {
 # Returns a newly created cookie struct from a Set-Cookie string. Does not
 # validate or create default values of attributess. Only processes what is
 # given
+# Parsing is done according with RFC6265bis no RFC6265
 #
 sub decode_set_cookie{
   no warnings "experimental";
   # $string, converter
+  my $input=$_[0];
 	my $key;
 	my $value;
 	my @values;
 	my $first=1;
-  my @fields=split /;\s*/, $_[0];
-  #Value needs to be the first field 
-	my $count=($values[1], $values[2])=split "=", shift(@fields), 2;
+  my @fields;#=split /;\s*/, $_[0];
 
-  #If no key value pair the forget it
-  return undef if $count!=2;
+  #Value needs to be the first field 
+
+  my $index=index $input, ";";
+  my $name_value;
+  if($index>=0){
+    # at least one ";"  was found
+    $name_value=substr $input,0, $index;
+    substr $input, 0, $index+1, "";
+    
+  }
+  else {
+    # No ";" found
+    $name_value=$input;
+    $input="";
+  }
+ 
+  Log::OK::TRACE and log_trace " decoding cookie name: name value: $name_value";
+
+  $index=index $name_value, "=";
+
+  #Abort unless has a name
+  return unless $index >0;
+
+  $values[1]= substr $name_value, 0, $index;
+  $values[2]= substr $name_value, $index+1;
+  Log::OK::TRACE and log_trace " decoding cookie name: $values[1] value:$values[2]";
+
 
   # trip whitespace
   $values[1]=trim($values[1]);
   $values[2]=trim($values[2]);
 
-  #If the name is not present forget it
-  return unless $values[1]; 
+  # TODO: test for controll characters
   
+
+
+  Log::OK::TRACE and log_trace " decoding cookie name: $values[1] value:$values[2]";
+
+  #Process attributes if input remaining;
+  return \@values unless $input;
+
+  @fields=split /;\s*/, $input;
 
 	for(@fields){
 
@@ -190,7 +228,8 @@ sub decode_set_cookie{
   #
   for($values[COOKIE_EXPIRES]//()){
     my ($wday_key, $mday, $mon_key, $year, $hour, $min, $sec, $tz)=
-     /([^,]+), (\d+)\-([^-]{3})\-(\d{4}) (\d+):(\d+):(\d+) (\w+)/;
+     /([^,]+), (\d+).([^-]{3}).(\d{4}) (\d+):(\d+):(\d+) (\w+)/;
+     #TODO support parsing of other deprecated data formats
 
     if(70<=$year<=99){
       $year+=1900;
@@ -262,6 +301,7 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
 	  $string.="; Host-Only" if defined $cookie->[COOKIE_HOST_ONLY];				
 	  $string.="; Creation-Time=$cookie->[COOKIE_CREATION_TIME]";
 	  $string.="; Last-Access-Time=$cookie->[COOKIE_LAST_ACCESS_TIME]";
+	  $string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
   }
 
 	$string;
