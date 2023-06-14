@@ -64,9 +64,9 @@ my @urls;
     my $value=join "", map {chr(ord("a")+rand(26))} 1..10;
     my $path=$paths[rand @paths];
     my $domain=$domains[rand @domains];
-    push @cookies, "$key=$value; path=$path; domain=$domain;"; 
+    push @cookies, "$key=$value; path=$path; domain=$domain; Secure"; 
     push @proto_cookies, [name=>$key,path=>$path, domain=>$domain];
-    my $url= "http://$domain$path"."a";
+    my $url= "https://$domain$path"."a";
     push @urls,$url;
   }
 }
@@ -126,7 +126,7 @@ cmpthese 1000, {
   http_state=>sub { 
     for(@samples){
       #say $_;
-      my $string=$http_state_jar->encode_cookies($urls[$_]);
+      my $string=$http_state_jar->encode_request_cookies($urls[$_]);
       #say "http_state: ".$string if $string;
       push $results[0]->@*, $string;
     }

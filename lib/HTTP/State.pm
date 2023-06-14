@@ -694,7 +694,8 @@ method set_cookies($request_uri, @cookies){
 #                   same as resource
 #
 
-method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
+method _get_cookies($request_uri, $same_site_status, $type){
+  #method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   # Cookies are stored sorted in ascending reverse dns order. parse the URI to get the domain
   #
   # Parse the uri
@@ -715,9 +716,9 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   $host=scalar reverse $host;
 
   # Parse the uri
-  my ($rscheme, $rauthority, $rpath, $rquery, $rfragment) =
-  $referer_uri =~ 
-    m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+  #my ($rscheme, $rauthority, $rpath, $rquery, $rfragment) =
+  #$referer_uri =~ 
+  #  m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
 
     #my ($ruser, $rpassword, $ref_host, $rport)=$authority =~  
     #m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
@@ -730,9 +731,9 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   # referer uri then it is treated as same site and
   #
   # However if the referer IS defined, test to see if it is the same site
-  my $same_site= defined $referer_uri
-    ? ($rscheme eq $scheme) && ($rauthority eq $authority)
-    : 1;
+  #my $same_site= defined $referer_uri
+  #? ($rscheme eq $scheme) && ($rauthority eq $authority)
+  #: 1;
   
 
 
@@ -742,11 +743,10 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   local $_;
   my $time=time-$tz_offset;
   my @output;
-  my $path_ok=1;
-  my $run;
+  #my $path_ok=1;
   
   # If $name is empty, we are doing a query for all cookies for this domain/path
-  my $any_name=!$name;
+  #my $any_name=!$name;
   my $time_now=time; 
 
   ####
@@ -757,10 +757,11 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   # domain key, substring no longer matches
   #
   #my @levels=split /\./, $host=~s/$sld\.//r;
-  my @levels=split /\./, substr $host, length($sld)+1;
+  
+  #my @levels=split /\./, substr $host, length($sld)+1;
 
-  while(@levels){
-    $sld="$sld.".shift @levels;
+  #while(@levels){
+    #$sld="$sld.".shift @levels;
     # Finds the first domain string matching.  The database is searched by the
     # KEY field, which is DOMAIN PATH NAME. The domain is in reverse order so
     # the host name (also reversed) can be used as a prefix which allows a simple 
@@ -770,24 +771,18 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
 
     Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
     Log::OK::TRACE and log_trace  "looking for host: $sld";
-
+    local $_;
     while( $index<@_cookies){
       #say " while in get cookeis index: $index";
       $_=$_cookies[$index];
-      #say " sld: $sld, domain: $_->[COOKIE_DOMAIN]";
-      # Cookies are sorted by domain. If the domain is not a prefix match
-      # we consider the search finished. Actual domain testing is done 
-      # if the prefix matches
-      #
 
-      # Domains are stored 'reversed'. That means prefixes will always come first.
-      # When a  domain no longer matches as a prefix then we know the search can stop
-      #last if index $sld, $_->[COOKIE_DOMAIN];
+      # End the search when the $sld of request is no longer a prefix for the
+      # cookie domain being tested
       last if index $_->[COOKIE_DOMAIN], $sld;
 
-
       # Need an exact match, not a domain match
-      ++$index and next if $host ne $_->[COOKIE_DOMAIN]  and $_->[COOKIE_HOST_ONLY];
+      ++$index and next if $_->[COOKIE_HOST_ONLY] and $host ne $_->[COOKIE_DOMAIN];
+
       Log::OK::TRACE and log_trace "Hostonly and host eq domain passed";
 
 
@@ -799,7 +794,7 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
       # Skip this cookies if the action is classed as api and not as a 
       # browing http request
       #
-      ++$index and next if $_->[COOKIE_HTTPONLY] and $action//"" eq "api";
+      ++$index and next if $_->[COOKIE_HTTPONLY] and $type eq "non-HTTP";
       Log::OK::TRACE and log_trace "action passed";
 
 
@@ -807,102 +802,31 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
       # expiry immediately. the $any_name flag allows all cookies for a domain to
       # be extracted
       #
-      if($any_name or $_->[COOKIE_NAME] eq $name){
+      #if($any_name or $_->[COOKIE_NAME] eq $name){
         # Found a matching cookie.
-        Log::OK::TRACE and log_trace "NAME OK";
-        # Process expire
-        if($_->[COOKIE_EXPIRES] <= $time){
-          # Expired, remove it from the list
-          #
-          Log::OK::TRACE and log_trace "cookie under test expired. removing";
-          splice @_cookies, $index, 1;
-          next;
-        }
+      Log::OK::TRACE and log_trace "NAME OK";
 
-        # Test if we really want to send the cookie to the domain based on use action
-
-
-        # Check same site?
-        # Strict => User agent only send cookie if the referer is of the same domain
-        #           Or if the address is typed into the address bar
-        #
-        # Lax   =>  Clicking a link and the user navigating to a site from an third party is is ok 
-        #            However accessing a resource from a thirdparty site the cookie is not sent
-        #
-        # None  =>   Cookie is always sent for
-        #
-        if($action){
-          # Only process same site if we know what action is being initiated
-          #
-          if($action eq "top"){
-            # Send cookie on for strict, lax or none. Implicit same site
-          }
-          elsif($action eq "follow"){
-            # Send cookie only on lax or none, if not same site.
-            ++$index and next unless $same_site || $_->[COOKIE_SAMESITE] =~/Lax|None/i;
-             
-          }
-          elsif($action eq "resource"){
-            # eg. Non document non api request. 
-            # Only send from third party site if None
-            ++$index and next unless $same_site || $_->[COOKIE_SAMESITE] =~/None/i;
-          }
-          elsif($action eq "api"){
-            # Like resource, but is treated as non http
-            ++$index and next unless $same_site || $_->[COOKIE_SAMESITE] =~/None/i;
-          }
-          else {
-            # no  action, treat as same site
-          }
-        }
-
-
-
-
-        # Process path matching as per section 5.1.4 in RFC 6265
-        #
-        #$path_ok=
-        ++$index and next unless _path_match($path, $_);
-        ##########################################################################################
-        # $path||="/";    #TODO find a reference to a standard or rfc for this                   #
-        # Log::OK::TRACE and log_trace "PATH: $path";                                            #
-        # Log::OK::TRACE and log_trace "Cookie PATH: $_->[COOKIE_PATH]";                         #
-        #                                                                                        #
-        # if($path eq $_->[COOKIE_PATH]){                                                        #
-        #   $path_ok=1;                                                                          #
-        # }                                                                                      #
-        #                                                                                        #
-        # elsif (substr($_->[COOKIE_PATH], -1, 1) eq "/"){                                       #
-        #   # Cookie path ends in a slash?                                                       #
-        #   $path_ok=index($path, $_->[COOKIE_PATH])==0  # Yes, check if cookie path is a prefix #
-        # }                                                                                      #
-        # elsif(substr($path,length($_->[COOKIE_PATH]), 1) eq "/"){                              #
-        #   $path_ok= 0==index $path, $_->[COOKIE_PATH];                                         #
-        # }                                                                                      #
-        # else {                                                                                 #
-        #   # Not a  path match                                                                  #
-        #   $path_ok=undef;                                                                      #
-        # }                                                                                      #
-        # Log::OK::TRACE and log_trace "Path ok: $path_ok";                                      #
-        ##########################################################################################
-
-        #++$index and next unless $path_ok; 
-
-        #
-        # If we get here, cookie should be included!
-        #
-        #
-        #Update last access time
-        #
-        $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
-        Log::OK::TRACE and log_trace "Pushing cookie";
-        push @output, $_;   
-
+      # Process expire
+      if($_->[COOKIE_EXPIRES] <= $time){
+        Log::OK::TRACE and log_trace "cookie under test expired. removing";
+        splice @_cookies, $index, 1;
+        next;
       }
+
+      # Process path matching as per section 5.1.4 in RFC 6265
+      ++$index and next unless _path_match($path, $_);
+
+
+      #
+      # If we get here, cookie should be included!
+      #Update last access time
+      #
+      $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
+      Log::OK::TRACE and log_trace "Pushing cookie";
+      push @output, $_;   
+
       $index++;
     }
-    #say "Last index: $index, size ".@_cookies;
-  }
    
   # TODO:
   # Sort the output as recommended by RFC 6525
@@ -927,25 +851,25 @@ method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
 }
 
 
-method get_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
+method get_cookies($request_uri, $same_site_status, $type){
   # Do a copy of the matching entries
   #
-  map [@$_], $self->_get_cookies($request_uri, $referer_uri, $action, $name);
+  map [@$_], $self->_get_cookies($request_uri, $same_site_status, $type);
 }
 
 
 #TODO rename to retrieve_cookies?
-method encode_request_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
-  my $cookies=$self->_get_cookies($request_uri, $referer_uri, $action, $name);
+method encode_request_cookies($request_uri, $same_site_status="cross-site", $type="HTTP"){
+  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type);
   return "" unless @$cookies;
   join "; ", map { "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]"} @$cookies;
 
 }
 
 
-method get_kv_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
+method get_kv_cookies($request_uri, $same_site_status, $type){
   
-  my $cookies=$self->_get_cookies($request_uri, $referer_uri, $action, $name);
+  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type);
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
 
