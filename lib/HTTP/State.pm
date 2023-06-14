@@ -46,6 +46,7 @@ field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field $_suffix_cache :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
 field $_default_same_site :param="None";
+field $_default_action :param="top";
                             
 # Algorithm structures
 # Array of arrays acting as key value tuples. Domain sorted in reverse order
@@ -120,15 +121,17 @@ sub _path_match($path, $cookie){
   $path_ok;
 }
 
+#returns self for chaining
+# TODO rename to "store_cookies"
 method set_cookies($request_uri, @cookies){
   #TODO: fix this
-  my $action="";
+  my $action=$_default_action;
   use Data::Dumper;
   Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
   Log::OK::TRACE and log_trace __PACKAGE__. Dumper @cookies;
 
-  return unless @cookies;
+  return $self unless @cookies;
   # Parse the request_uri
   #
   my ($scheme, $authority, $path, $query, $fragment) =
@@ -283,13 +286,14 @@ method set_cookies($request_uri, @cookies){
     #$sld=$_sld_cache{$c->[COOKIE_DOMAIN]}//=scalar reverse $self->second_level_domain(scalar reverse $c->[COOKIE_DOMAIN]);
     if($c->[COOKIE_DOMAIN]){
       $suffix=$_suffix_cache->{$c->[COOKIE_DOMAIN]}//=scalar reverse $self->suffix(scalar reverse $c->[COOKIE_DOMAIN]);
+      Log::OK::TRACE and log_trace "Looking up $c->[COOKIE_DOMAIN]=>$suffix";
       if($suffix){
         if($suffix eq $c->[COOKIE_DOMAIN]){
-          $c->[COOKIE_DOMAIN]="";
-        }
-        else{
           Log::OK::TRACE and log_trace "Domain is public suffix. reject";
           next;
+        }
+        elsif($c->[COOKIE_DOMAIN] eq $rhost){
+          $c->[COOKIE_DOMAIN]="";
         }
       }
     }
@@ -468,7 +472,7 @@ method set_cookies($request_uri, @cookies){
       #had it already existed prior to the navigation.
       #4
       #Abort these steps and ignore the newly created cookie entirely.
-    my $action="top";
+      #my $action="top";
     my $same_site;
     #my $same_site= defined $referer_uri
     #  ? ($rscheme eq $scheme) && ($rauthority eq $authority)
@@ -637,6 +641,7 @@ method set_cookies($request_uri, @cookies){
     }
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 23, 24 OK";
   }
+  return $self;
 }
 
 
@@ -689,7 +694,7 @@ method set_cookies($request_uri, @cookies){
 #                   same as resource
 #
 
-method _get_cookies($request_uri, $referer_uri, $action="", $name=""){
+method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   # Cookies are stored sorted in ascending reverse dns order. parse the URI to get the domain
   #
   # Parse the uri
@@ -929,6 +934,7 @@ method get_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef)
 }
 
 
+#TODO rename to retrieve_cookies?
 method encode_request_cookies($request_uri, $referer_uri=undef, $action=undef, $name=undef){
   my $cookies=$self->_get_cookies($request_uri, $referer_uri, $action, $name);
   return "" unless @$cookies;
@@ -1019,8 +1025,10 @@ method spurt_set_cookies($path){
   }
 }
 
+# Returns self for chaining
 method clear{
   @_cookies=(); #Clear the db
+  $self;
 }
 
 

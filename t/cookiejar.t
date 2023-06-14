@@ -59,7 +59,7 @@ $cookie->[COOKIE_VALUE]="NEW VALUE";
 
 #$jar->set_cookies($request_url,$cookie);
 
-my $header=$jar->encode_cookies($request_url);
+my $header=$jar->encode_request_cookies($request_url);
 
 $jar->spurt_set_cookies("test.cookie.jar");
 

@@ -1,22 +1,30 @@
 use strict;
 use warnings;
+use Data::Dumper;
+use Log::ger::Output "Screen";
+use Log::OK {
+  lvl=>"info",
+  opt=>"verbose"
+};
 
 use Test::More;
 use HTTP::State::Cookie qw":constants :encode :decode cookie_struct";
 use HTTP::State;
+
 
 my $jar=HTTP::State->new;
 
 my $domain;
 my $path;
 my $name="test";
-my $value;
+my $value="value1";
 
 my $url;
 my $cookie=cookie_struct(
   $name=>$value,
   domain=>$domain,
-  path=>$path
+  path=>$path,
+  secure=>1
 );
 
 
@@ -24,10 +32,9 @@ my $cookie=cookie_struct(
   
   # DEFAULT DOMAIN
   #
-  my $url="http://test.example.com.au";
-  $jar->clear;
-  $jar->set_cookies($url, $cookie);
-  my $encoded=$jar->dump_cookies;
+  my $url="https://test.example.com.au";
+  $jar->clear->set_cookies($url, $cookie);
+  my ($encoded)=$jar->dump_cookies;
   
   # no domain set so use the url as default
   ok $encoded=~/Domain=test\.example\.com\.au/, "Default domain";
@@ -38,18 +45,19 @@ my $cookie=cookie_struct(
 {
   # DEFAULT PATH
   #
-  $jar->clear;
   $cookie=cookie_struct(
     $name=>$value,
     domain=>$domain,
-    path=>$path
+    path=>$path,
+    secure=>1
   );
-  my $url="http://test.example.com.au/my/path/here/da.pdf";
-  $jar->set_cookies($url, $cookie);
+  my $url="https://test.example.com.au/my/path/here/da.pdf";
+  $jar->clear->set_cookies($url, $cookie);
 
-  my $encoded=$jar->dump_cookies;
+  my ($encoded)=$jar->dump_cookies;
   ok  $encoded=~/Path=\/my\/path\/here/, "Default Path. Upto right most /";
 }
+
 {
   # Prevent domain attribute targeting sub domains.
   #
@@ -63,8 +71,8 @@ my $cookie=cookie_struct(
   $url="http://test.example.com.au/my/path/here/da.pdf";
   $jar->set_cookies($url, $cookie);
 
-  my $encoded=$jar->dump_cookies;
-  ok $encoded eq "", "Attempt sub domain cookie set";
+  my @encoded=$jar->dump_cookies;
+  ok @encoded ==0, "Attempt sub domain cookie set";
 }
 {
   # Prevent domain attribute targeting public suffix domain
@@ -79,8 +87,8 @@ my $cookie=cookie_struct(
   $url="http://test.example.com.au/my/path/here/da.pdf";
   $jar->set_cookies($url,$cookie);
 
-  my $encoded=$jar->dump_cookies;
-  ok $encoded eq "", "Ignore Attempt public domain cookie set";
+  my @encoded=$jar->dump_cookies;
+  ok @encoded == 0, "Ignore Attempt public domain cookie set";
 }
 
 {
@@ -89,38 +97,42 @@ my $cookie=cookie_struct(
   #
   $jar->clear;
   for(qw<a b c d e>){
-    $url="http://dd.$_.example.com/";
+    $url="https://dd.$_.example.com/";
     $cookie=cookie_struct(
       name=>"my_cookie",
       domain=>"dd.$_.example.com",
+      secure=>1
     );
     $jar->set_cookies($url, $cookie);
   }
-    $url="http://dd.dd.example.com/";
-    $cookie=cookie_struct(
-      name=>"my_cookie",
-      domain=>"dd.dd.example.com",
-    );
-    $jar->set_cookies($url, $cookie);
-  my $encoded=$jar->dump_cookies;
+  $url="https://dd.dd.example.com/";
+  $cookie=cookie_struct(
+    name=>"my_cookie",
+    domain=>"dd.dd.example.com",
+    secure=>1
+  );
+  $jar->set_cookies($url, $cookie);
+  my @encoded=$jar->dump_cookies;
 
-  ok split("\n", $encoded)==6, "Count ok";
+  say STDERR join "\n", @encoded;
+  ok @encoded==6, "Count ok";
 }
 
 {
   # Set a cookie with the same name and path but different domains
   #
   $jar->clear;
-  $url="http://dd.dd.example.com/";
+  $url="https://dd.dd.example.com/";
   $cookie=cookie_struct(
     name=>"my_cookie",
     domain=>"dd.dd.example.com",
+    secure=>1
   );
 
   $jar->set_cookies($url, $cookie) for 1..5;
-  my $encoded=$jar->dump_cookies;
+  my @encoded=$jar->dump_cookies;
 
-  ok split("\n", $encoded)==1, "Count ok";
+  ok @encoded==1, "Count ok";
 
 }
 
@@ -128,10 +140,11 @@ my $cookie=cookie_struct(
   # Invariant creation time for cookie replacement
   #
   $jar->clear;
-  $url="http://dd.dd.example.com/";
+  $url="https://dd.dd.example.com/";
   $cookie=cookie_struct(
     name=>"my_cookie",
     domain=>"dd.dd.example.com",
+    secure=>1
   );
 
   $jar->set_cookies($url, $cookie);
