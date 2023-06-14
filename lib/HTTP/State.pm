@@ -45,8 +45,11 @@ class HTTP::State;
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field $_suffix_cache :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
-field $_default_same_site :param="None";
+#field $_default_same_site :param="None";
 field $_default_action :param="top";
+
+field $_lax_allowing_unsafe :param=undef;
+field $_lax_allowing_unsafe_timeout :param=120;
                             
 # Algorithm structures
 # Array of arrays acting as key value tuples. Domain sorted in reverse order
@@ -446,7 +449,7 @@ method set_cookies($request_uri, @cookies){
     #in the cookie-attribute-list with an attribute-name of "SameSite".
     #Otherwise, set the cookie's same-site-flag to "Default".
 
-    $c->[COOKIE_SAMESITE]//=$_default_same_site;
+    $c->[COOKIE_SAMESITE]//="Default";#$_default_same_site;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 17 OK";
     #18
@@ -694,7 +697,7 @@ method set_cookies($request_uri, @cookies){
 #                   same as resource
 #
 
-method _get_cookies($request_uri, $same_site_status, $type){
+method _get_cookies($request_uri, $same_site_status, $type, $method){
   #method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
   # Cookies are stored sorted in ascending reverse dns order. parse the URI to get the domain
   #
@@ -743,90 +746,84 @@ method _get_cookies($request_uri, $same_site_status, $type){
   local $_;
   my $time=time-$tz_offset;
   my @output;
-  #my $path_ok=1;
-  
-  # If $name is empty, we are doing a query for all cookies for this domain/path
-  #my $any_name=!$name;
   my $time_now=time; 
 
-  ####
-  # MAIN SEARCH ALGORITHM
-  #
-  # Search the list from the highest domain down Start of each of matching with
-  # search of sorted domain names iterates over the following items until the
-  # domain key, substring no longer matches
-  #
-  #my @levels=split /\./, $host=~s/$sld\.//r;
-  
-  #my @levels=split /\./, substr $host, length($sld)+1;
+  my $index=search_string_left $sld, \@_cookies;
 
-  #while(@levels){
-    #$sld="$sld.".shift @levels;
-    # Finds the first domain string matching.  The database is searched by the
-    # KEY field, which is DOMAIN PATH NAME. The domain is in reverse order so
-    # the host name (also reversed) can be used as a prefix which allows a simple 
-    # string le comparison in the binary search
-    #
-    my $index=search_string_left $sld, \@_cookies;
+  Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
+  Log::OK::TRACE and log_trace  "looking for host: $sld";
+  local $_;
 
-    Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
-    Log::OK::TRACE and log_trace  "looking for host: $sld";
-    local $_;
-    while( $index<@_cookies){
-      #say " while in get cookeis index: $index";
-      $_=$_cookies[$index];
+  $index++ unless @_cookies;  # Force skip the test loop if no cookies in the jar
 
-      # End the search when the $sld of request is no longer a prefix for the
-      # cookie domain being tested
-      last if index $_->[COOKIE_DOMAIN], $sld;
+  while( $index<@_cookies){
+    $_=$_cookies[$index];
 
-      # Need an exact match, not a domain match
-      ++$index and next if $_->[COOKIE_HOST_ONLY] and $host ne $_->[COOKIE_DOMAIN];
-
-      Log::OK::TRACE and log_trace "Hostonly and host eq domain passed";
-
-
-      # Secure cookie  and secure channel.
-      #
-      ++$index and next if $_->[COOKIE_SECURE] and $scheme ne "https";
-      Log::OK::TRACE and log_trace "secure and scheme eq https passed";
-
-      # Skip this cookies if the action is classed as api and not as a 
-      # browing http request
-      #
-      ++$index and next if $_->[COOKIE_HTTPONLY] and $type eq "non-HTTP";
-      Log::OK::TRACE and log_trace "action passed";
-
-
-      # Name match Lets see if the cookie name is a match. If so process the
-      # expiry immediately. the $any_name flag allows all cookies for a domain to
-      # be extracted
-      #
-      #if($any_name or $_->[COOKIE_NAME] eq $name){
-        # Found a matching cookie.
-      Log::OK::TRACE and log_trace "NAME OK";
-
-      # Process expire
-      if($_->[COOKIE_EXPIRES] <= $time){
-        Log::OK::TRACE and log_trace "cookie under test expired. removing";
-        splice @_cookies, $index, 1;
-        next;
-      }
-
-      # Process path matching as per section 5.1.4 in RFC 6265
-      ++$index and next unless _path_match($path, $_);
-
-
-      #
-      # If we get here, cookie should be included!
-      #Update last access time
-      #
-      $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
-      Log::OK::TRACE and log_trace "Pushing cookie";
-      push @output, $_;   
-
-      $index++;
+    # Process expire. Do not update $index
+    if($_->[COOKIE_EXPIRES] <= $time){
+      Log::OK::TRACE and log_trace "cookie under test expired. removing";
+      splice @_cookies, $index, 1;
+      next;
     }
+
+
+
+    # End the search when the $sld of request is no longer a prefix for the
+    # cookie domain being tested
+    last if index $_->[COOKIE_DOMAIN], $sld;
+
+    ## At this point we have a domain match ##
+
+    # Need an exact match, not a domain match
+    next if ($_->[COOKIE_HOST_ONLY] and $host ne $_->[COOKIE_DOMAIN])
+         or ($_->[COOKIE_SECURE] and $scheme ne "https")
+         or ($_->[COOKIE_HTTPONLY] and $type eq "non-HTTP")
+         or (!_path_match($path, $_));
+
+    if(($same_site_status eq "cross-site") and ($_->[COOKIE_SAMESITE] ne "None")){
+      my $f=(($type eq "HTTP") and (($_->[COOKIE_SAMESITE] eq "Lax") or  ($_->[COOKIE_SAMESITE] eq "Default")));
+      my $g=($method =~ /GET|HEAD|OPTIONS|TRACE/);
+      $g||=(
+        $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] eq "Default" 
+        and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
+      );
+
+      #and ($browser_context
+      #active context or top level traversable
+       
+    }
+
+
+
+    ##################################################################################
+    #                                                                                #
+    # Log::OK::TRACE and log_trace "Hostonly and host eq domain passed";             #
+    #                                                                                #
+    #                                                                                #
+    # # Secure cookie  and secure channel.                                           #
+    # #                                                                              #
+    # next if $_->[COOKIE_SECURE] and $scheme ne "https";                            #
+    # Log::OK::TRACE and log_trace "secure and scheme eq https passed";              #
+    #                                                                                #
+    # # Skip this cookies if the type of request is non-HTTP but cookie is HTTP only #
+    # #                                                                              #
+    # next if $_->[COOKIE_HTTPONLY] and $type eq "non-HTTP";                         #
+    # Log::OK::TRACE and log_trace "action passed";                                  #
+    #                                                                                #
+    # # Process path matching as per section 5.1.4 in RFC 6265                       #
+    # next unless _path_match($path, $_);                                            #
+    ##################################################################################
+
+
+    #
+    # If we get here, cookie should be included!
+    #Update last access time
+    #
+    $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
+    Log::OK::TRACE and log_trace "Pushing cookie";
+    push @output, $_;   
+    $index++;
+  }
    
   # TODO:
   # Sort the output as recommended by RFC 6525
@@ -859,8 +856,8 @@ method get_cookies($request_uri, $same_site_status, $type){
 
 
 #TODO rename to retrieve_cookies?
-method encode_request_cookies($request_uri, $same_site_status="cross-site", $type="HTTP"){
-  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type);
+method encode_request_cookies($request_uri, $same_site_status="cross-site", $type="HTTP", $method="GET"){
+  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type, $method);
   return "" unless @$cookies;
   join "; ", map { "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]"} @$cookies;
 

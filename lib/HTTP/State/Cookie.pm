@@ -244,12 +244,30 @@ sub decode_set_cookie{
   }
 
 
+  # Fix leading/trailing dot
   for($values[COOKIE_DOMAIN]//()){
     s/\.$//;
     s/^\.//;
     $_ = scalar reverse $_;
   }
 
+  # Fix same site
+  
+  for($values[COOKIE_SAMESITE]//()){
+    $_=lc $_;
+    if($_ eq "none"){
+      $_="None";
+    }
+    elsif($_ eq "strict"){
+      $_="Strict";
+    }
+    elsif($_ eq "lax"){
+      $_= "Lax";
+    }
+    else {
+      $_="Default";
+    }
+  }
   \@values;
 }
 
