@@ -32,7 +32,7 @@ use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_K
 use Time::Piece;
 use Time::Local qw<timegm_modern>;
 
-my $tz_offset=Time::Piece->localtime->tzoffset;
+my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 
 # Encode matching cooki into a cookie string
 use feature "signatures";
@@ -126,6 +126,7 @@ sub _path_match($path, $cookie){
 
 #returns self for chaining
 # TODO rename to "store_cookies"
+
 method set_cookies($request_uri, @cookies){
   #TODO: fix this
   my $action=$_default_action;
@@ -623,12 +624,18 @@ method set_cookies($request_uri, @cookies){
         $c->[COOKIE_CREATION_TIME]=$_cookies[$index][COOKIE_CREATION_TIME];
         if($c->[COOKIE_EXPIRES]<=$time){
           # Found but expired by new cookie. Delete the cookie
-          Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired";
+          Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired. purging";
           splice @_cookies, $index, 1;
+        }
+        else {
+          # replace existing cookie
+          Log::OK::TRACE and log_trace __PACKAGE__. " found cookie. Updating";
+          $_cookies[$index]=$c;
         }
     }
 
     elsif($c->[COOKIE_EXPIRES]<$time){
+      Log::OK::TRACE and log_trace __PACKAGE__. " new cookie  already expired. rejecting";
       next; # new cookie already expired.
     }
     else {
@@ -638,7 +645,7 @@ method set_cookies($request_uri, @cookies){
             push @_cookies, $c;
           }
           else{
-            Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
+            #Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
             splice @_cookies, $index, 0, $c;
           }
     }
@@ -648,62 +655,7 @@ method set_cookies($request_uri, @cookies){
 }
 
 
-# Retrieves the cookies by name, for the $request_uri in question. The actual
-# cookies returned are subject to filtering of the user agent conditions.
-#
-# Referer url is used in selecting cookies for ssame site access
-# Policy is a hash of keys modifiying behaviour 
-#   eq action=> follow/navigate
-#                 HTTP only
-#                   true
-#                 Trigger:
-#                   User clicking a link and navigating to a new site
-#
-#                 Samesite handling:
-#                   Lax and None - allow cookies sent cross origin
-#                   Strict - no cookies sent
-#                   
-#               resource    
-#                 HTTP only
-#                   true
-#                   Not a navigation
-#                 Trigger:
-#                   User agent parsing a html file and loading refereced resouces (ie image)
-#                 Samesite handling
-#                   None - allows cookies sent cross origin
-#                   Lax - no cookie sent
-#                   Strict - no cookie sent
-#
-#
-#               top
-#                 HTTP only
-#                   true
-#                 Trigger:
-#                   Manually typing an address or clicking a shortcut
-#
-#                 Samesite handling:
-#                     Strict - cookie sent
-#                     Lax - cookie sent
-#                     None - cookie sent
-#
-#               api
-#                 HTTP only
-#                   false - only send cookie if HTTPonly false
-#                   Not a navigation
-#                 Trigger:
-#                   programic access
-#
-#                 Samesite
-#                   same as resource
-#
-
 method _get_cookies($request_uri, $same_site_status, $type, $method){
-  #method _get_cookies($request_uri, $referer_uri="", $action="", $name=""){
-  # Cookies are stored sorted in ascending reverse dns order. parse the URI to get the domain
-  #
-  # Parse the uri
-
-  
   my ($scheme, $authority, $path, $query, $fragment) =
   $request_uri =~ 
     m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
@@ -713,51 +665,35 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
 
   $port//=80;
 
-  # Look up the suffix. This will be the root for our domain search
+  # Look up the second level domain. This will be the root for our domain search
   #
-  my $sld=scalar reverse $self->suffix($host);
-  $host=scalar reverse $host;
-
-  # Parse the uri
-  #my ($rscheme, $rauthority, $rpath, $rquery, $rfragment) =
-  #$referer_uri =~ 
-  #  m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
-
-    #my ($ruser, $rpassword, $ref_host, $rport)=$authority =~  
-    #m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
-
-    #$ref_host=scalar reverse $ref_host;
-  
-  # Mark as same site if the referer is undefined This is intended to represent
-  # top level navigation (typing an address) where the refering site is not
-  # considered. this also allows backward compatibility. If your don't provide a
-  # referer uri then it is treated as same site and
-  #
-  # However if the referer IS defined, test to see if it is the same site
-  #my $same_site= defined $referer_uri
-  #? ($rscheme eq $scheme) && ($rauthority eq $authority)
-  #: 1;
-  
-
+  #my $sld=scalar reverse $self->suffix($host);
+  my $sld=$_sld_cache{$host}//=scalar reverse $self->second_level_domain($host);
+  my $rhost=scalar reverse $host;
 
 
   # Iterate through all cookies until the domain no longer matches
   #
-  local $_;
   my $time=time-$tz_offset;
   my @output;
-  my $time_now=time; 
 
   my $index=search_string_left $sld, \@_cookies;
 
   Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
   Log::OK::TRACE and log_trace  "looking for host: $sld";
+
   local $_;
 
   $index++ unless @_cookies;  # Force skip the test loop if no cookies in the jar
 
   while( $index<@_cookies){
     $_=$_cookies[$index];
+
+    # End the search when the $sld of request is no longer a prefix for the
+    # cookie domain being tested
+    last if index $_->[COOKIE_DOMAIN], $sld;
+
+    #say $_->[COOKIE_DOMAIN], " Request $request_uri";
 
     # Process expire. Do not update $index
     if($_->[COOKIE_EXPIRES] <= $time){
@@ -768,21 +704,19 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
 
 
 
-    # End the search when the $sld of request is no longer a prefix for the
-    # cookie domain being tested
-    last if index $_->[COOKIE_DOMAIN], $sld;
 
     ## At this point we have a domain match ##
 
-    # Need an exact match, not a domain match
-    next if ($_->[COOKIE_HOST_ONLY] and $host ne $_->[COOKIE_DOMAIN])
+    # Test for other restrictions...
+    $index++ and next if 
+         (!_path_match($path, $_))
+         or ($_->[COOKIE_HOST_ONLY] and $rhost ne $_->[COOKIE_DOMAIN])
          or ($_->[COOKIE_SECURE] and $scheme ne "https")
-         or ($_->[COOKIE_HTTPONLY] and $type eq "non-HTTP")
-         or (!_path_match($path, $_));
+         or ($_->[COOKIE_HTTPONLY] and $type eq "non-HTTP");
 
     if(($same_site_status eq "cross-site") and ($_->[COOKIE_SAMESITE] ne "None")){
       my $f=(($type eq "HTTP") and (($_->[COOKIE_SAMESITE] eq "Lax") or  ($_->[COOKIE_SAMESITE] eq "Default")));
-      my $g=($method =~ /GET|HEAD|OPTIONS|TRACE/);
+      my $g= $method  eq "GET" or $method eq "HEAD" or $method eq "OPTIONS" or $method eq "TRACE";
       $g||=(
         $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] eq "Default" 
         and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
@@ -793,33 +727,11 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
        
     }
 
-
-
-    ##################################################################################
-    #                                                                                #
-    # Log::OK::TRACE and log_trace "Hostonly and host eq domain passed";             #
-    #                                                                                #
-    #                                                                                #
-    # # Secure cookie  and secure channel.                                           #
-    # #                                                                              #
-    # next if $_->[COOKIE_SECURE] and $scheme ne "https";                            #
-    # Log::OK::TRACE and log_trace "secure and scheme eq https passed";              #
-    #                                                                                #
-    # # Skip this cookies if the type of request is non-HTTP but cookie is HTTP only #
-    # #                                                                              #
-    # next if $_->[COOKIE_HTTPONLY] and $type eq "non-HTTP";                         #
-    # Log::OK::TRACE and log_trace "action passed";                                  #
-    #                                                                                #
-    # # Process path matching as per section 5.1.4 in RFC 6265                       #
-    # next unless _path_match($path, $_);                                            #
-    ##################################################################################
-
-
     #
     # If we get here, cookie should be included!
     #Update last access time
     #
-    $_->[COOKIE_LAST_ACCESS_TIME]=$time_now;
+    $_->[COOKIE_LAST_ACCESS_TIME]=$time;
     Log::OK::TRACE and log_trace "Pushing cookie";
     push @output, $_;   
     $index++;
@@ -837,16 +749,16 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
   #        earlier creation-times are listed before cookies with later
   #        creation-times.
 
-  @output= sort {
-          length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])
-            || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME]
-      } @output;
-  
- 
+  ##########################################################################
+  # @output= sort {                                                        #
+  #         length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])        #
+  #           || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME] #
+  #     } @output;                                                         #
+  ##########################################################################
+      #say "df"; 
   \@output;
 
 }
-
 
 method get_cookies($request_uri, $same_site_status, $type){
   # Do a copy of the matching entries
@@ -858,25 +770,16 @@ method get_cookies($request_uri, $same_site_status, $type){
 #TODO rename to retrieve_cookies?
 method encode_request_cookies($request_uri, $same_site_status="cross-site", $type="HTTP", $method="GET"){
   my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type, $method);
-  return "" unless @$cookies;
-  join "; ", map { "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]"} @$cookies;
+  #return "" unless @$cookies;
+  join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 
 }
-
 
 method get_kv_cookies($request_uri, $same_site_status, $type){
   
   my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type);
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
-
-
-
-
-
-
-
-
 
 method dump_cookies {
   map encode_set_cookie($_, 1), @_cookies;
@@ -885,7 +788,6 @@ method dump_cookies {
 method db {
   \@_cookies;
 }
-
 
 method slurp_set_cookies($path) {
   open my $file, "<", $path 
@@ -925,8 +827,6 @@ method slurp_set_cookies($path) {
     }
   }
 }
-
-
 
 method spurt_set_cookies($path){
  open my $file, ">", $path 

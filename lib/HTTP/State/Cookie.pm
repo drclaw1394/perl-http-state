@@ -88,7 +88,7 @@ our @EXPORT=("cookie_struct");
 use Time::Piece;
 use Time::Local qw<timegm_modern>;
 
-my $tz_offset=Time::Piece->localtime->tzoffset;
+my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 
 
 # Expects the name and value as the first pair of arguments
