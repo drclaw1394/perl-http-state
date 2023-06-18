@@ -1,7 +1,6 @@
 =head1 NAME
 
-HTTP::State - Cookie (Jar) State for HTTP Clients
-
+HTTP::State - State (Cookie jar) for HTTP Clients
 
 =head1 SYNOPSIS
 
@@ -115,24 +114,23 @@ Flags are used to mark the intent of a request initiated by a user-agent.
 
 =head3 FLAG_SAME_SITE
 
-When this flag is set, request is considered "same-site". When unset,
-request is considered "cross-site".
+When this flag is set, request is considered "same-site". When unset, request
+is considered "cross-site".
 
 =head3 FLAG_TYPE_HTTP
 
-When this flag is set, request is considered "HTTP". When unset,
-request is considered "non-HTTP".
+When this flag is set, request is considered "HTTP". When unset, request is
+considered "non-HTTP".
 
 =head3 FLAG_SAFE_METH
 
-When this flag is set, request is considered "safe". When unset,
-request is considered "unsafe".
+When this flag is set, request is considered "safe". When unset, request is
+considered "unsafe".
 
 =head3 FLAG_TOP_LEVEL
 
-When this flag is set, request is considered "top level". When unset,
-request is considered "not-top-level".
-
+When this flag is set, request is considered "top level". When unset, request
+is considered "not-top-level".
 
 =head2 Storing Cookies
 
@@ -172,11 +170,10 @@ C<encode_request_cookies>, with the C<$flags> argument set 'wide open'.
   $jar->encode_request_cookies($request_url, $flags); 
 
 Retrieves cookies applicable to the specified request_url, subject to
-RFC6265bis 'cookie retrievel', and encodes them into a string suitable for use
+RFC6265bis 'cookie retrieval', and encodes them into a string suitable for use
 in a Cookie header in a HTTP request.
 
-The C<$flags> argument encodes the state of the user agent 
-
+The C<$flags> argument encodes the state of the user agent.
 
 =head3 get_cookies
 
@@ -257,6 +254,3 @@ Licensed under MIT
 THIS PACKAGE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES,
 INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
 FITNESS FOR A PARTICULAR PURPOSE.
-
-=cut
-

@@ -48,7 +48,7 @@ BEGIN {
 	>;
 	@values= 0 .. @names-1;
 
-	my @same_site=qw<Lax Strict None>;
+	my @same_site=qw<Lax Strict None Default>;
 
 	my @pairs=
 		(map { (("COOKIE_".uc $names[$_])=~tr/-'/_/r, $values[$_]) } 0..@names-1),	#elements

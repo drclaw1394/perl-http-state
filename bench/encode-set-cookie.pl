@@ -5,7 +5,7 @@ use Log::OK {
     opt=>"verbose"
   };
 use HTTP::State::Cookie qw<:encode :decode>;
-use HTTP::State;
+use HTTP::State ":constants";
 #use Cookie;
 use HTTP::CookieJar;
 use Protocol::HTTP::CookieJar;

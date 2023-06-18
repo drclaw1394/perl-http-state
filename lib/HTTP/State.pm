@@ -24,7 +24,7 @@ use HTTP::State::Cookie ":all";
 use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_KEY."]"};
 
 
-# Public suffix list list
+# Public suffix list loaded when needed
 #
 #use Mozilla::PublicSuffix qw<public_suffix>;
 
@@ -34,14 +34,21 @@ use Time::Local qw<timegm_modern>;
 
 my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 
-# Encode matching cooki into a cookie string
 use feature "signatures";
 
-
+# Constant flags foor User agent context
+#
 use constant FLAG_SAME_SITE=>0x01;      # Indicate request is same-site/cross-site
 use constant FLAG_TYPE_HTTP=>0x02;      # Indicate request is HTTP/non-HTTP
 use constant FLAG_SAFE_METH=>0x04;      # Indicate request is safe method
 use constant FLAG_TOP_LEVEL=>0x04;      # Indicate top level navigation
+
+
+use Exporter "import";
+
+my @const=qw<FLAG_SAME_SITE FLAG_TYPE_HTTP FLAG_SAFE_METH FLAG_TOP_LEVEL>;
+our @EXPORT_OK=@const;
+our %EXPORT_TAGS=("constants"=>\@const);
 
 class HTTP::State;
 
