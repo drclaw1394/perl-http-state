@@ -12,7 +12,7 @@ use Protocol::HTTP::CookieJar;
 
 use Benchmark qw<cmpthese timethese>;
 use Data::Dumper;
-my $count=625;
+my $count=100;
 my $origin_count=$count;#1000;#$ARGV[0]//1;
 my $path_count=$count;#1000;
 my $cookie_count=$count;#1000;
@@ -94,7 +94,7 @@ cmpthese 1, {
     for(@sample){
       #say $urls[$_];
       #say $cookies[$_];
-      $http_state_jar->set_cookies($urls[$_], $cookies[$_]);
+      $http_state_jar->set_cookies($urls[$_], 0xFF, $cookies[$_]);
       #say Dumper $http_state_jar->db;
     }
   },
@@ -110,7 +110,7 @@ cmpthese 1, {
       my $copy=decode_set_cookie($cookies[$_]);
       my $hash=hash_set_cookie($copy);
       #say join ", ",%$hash;
-      $protocol_http_jar->add(delete($hash->{name}), $hash, URI::XS->new($urls[$_]));
+      $protocol_http_jar->add(delete($hash->{name}), $hash, URI::XS->new($urls[$_]), Date::now());
     }
   }
 
@@ -159,7 +159,7 @@ cmpthese -1, {
 
   protocol_http=>sub {
     for(@samples){
-      my $array=$protocol_http_jar->find(my $url=URI::XS->new($urls[$_]));
+      my $array=$protocol_http_jar->find(my $url=URI::XS->new($urls[$_]), URI::XS->new($urls[$_]),Date::now(), Date::now());
       #say $url;
       #say "size : ". scalar @$array;
       #say "http_cookiejar: ".$string if $string;

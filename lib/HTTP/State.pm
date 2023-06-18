@@ -38,7 +38,10 @@ my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 use feature "signatures";
 
 
-
+use constant FLAG_SAME_SITE=>0x01;      # Indicate request is same-site/cross-site
+use constant FLAG_TYPE_HTTP=>0x02;      # Indicate request is HTTP/non-HTTP
+use constant FLAG_SAFE_METH=>0x04;      # Indicate request is safe method
+use constant FLAG_TOP_LEVEL=>0x04;      # Indicate top level navigation
 
 class HTTP::State;
 
@@ -46,11 +49,14 @@ field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field $_suffix_cache :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
 #field $_default_same_site :param="None";
-field $_default_action :param="top";
 
 field $_lax_allowing_unsafe :param=undef;
 field $_lax_allowing_unsafe_timeout :param=120;
-                            
+
+field $_max_expiry :param=400*24*3600; 
+
+field $_default_flags :param=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH;
+
 # Algorithm structures
 # Array of arrays acting as key value tuples. Domain sorted in reverse order
 #
@@ -127,9 +133,12 @@ sub _path_match($path, $cookie){
 #returns self for chaining
 # TODO rename to "store_cookies"
 
-method set_cookies($request_uri, @cookies){
+method add {
+  $self->set_cookies(shift, $_default_flags, @_);
+}
+
+method set_cookies($request_uri, $flags, @cookies){
   #TODO: fix this
-  my $action=$_default_action;
   use Data::Dumper;
   Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
@@ -230,7 +239,8 @@ method set_cookies($request_uri, @cookies){
     }
     else{
       $c->[COOKIE_PERSISTENT]=undef;
-      $c->[COOKIE_EXPIRES]=$time+400*24*3600; #Mimic chrome for maximum date
+      $c->[COOKIE_EXPIRES]=$time+$_max_expiry;
+      #400*24*3600; #Mimic chrome for maximum date
 
     }
 
@@ -376,7 +386,6 @@ method set_cookies($request_uri, @cookies){
     #is true, then abort these steps and ignore the cookie entirely.
 
 
-    Log::OK::TRACE and log_trace __PACKAGE__. " Scheme: $scheme action: $action";
     next if $c->[COOKIE_SECURE] and ($scheme ne "https");
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 12, 13 OK";
 
@@ -389,7 +398,7 @@ method set_cookies($request_uri, @cookies){
     #If the cookie was received from a "non-HTTP" API and the cookie's
     #http-only-flag is true, abort these steps and ignore the cookie entirely.
 
-    next if ($c->[COOKIE_HTTPONLY] and ($action eq "api"));
+    next if ($c->[COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP));
 
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 14, 15 OK";
@@ -453,6 +462,7 @@ method set_cookies($request_uri, @cookies){
     $c->[COOKIE_SAMESITE]//="Default";#$_default_same_site;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 17 OK";
+
     #18
     #If the cookie's same-site-flag is not "None":
       #1
@@ -476,24 +486,16 @@ method set_cookies($request_uri, @cookies){
       #had it already existed prior to the navigation.
       #4
       #Abort these steps and ignore the newly created cookie entirely.
-      #my $action="top";
-    my $same_site;
-    #my $same_site= defined $referer_uri
-    #  ? ($rscheme eq $scheme) && ($rauthority eq $authority)
-    #  : 1;
 
     if($c->[COOKIE_SAMESITE] ne "None"){
-      if($action eq "api" and !$same_site){
+      if (not $flags & FLAG_TYPE_HTTP and not $flags & FLAG_SAME_SITE){
         next;
       }
-      elsif($action eq "follow" and $same_site){
-        #Continue
+      elsif($flags & FLAG_SAME_SITE){
+        # continue
       }
-      elsif($action eq "resource" and $same_site){
-        #Continue
-      }
-      elsif($action eq "top"){
-        #Continue
+      elsif($flags & FLAG_TOP_LEVEL){
+        # continue
       }
       else {
         next;
@@ -620,7 +622,7 @@ method set_cookies($request_uri, @cookies){
 
     if($found){
         #reject if api call http only cookie currently exists
-        next if $_cookies[$index][COOKIE_HTTPONLY] and $action eq "api";
+        next if $_cookies[$index][COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP);
         $c->[COOKIE_CREATION_TIME]=$_cookies[$index][COOKIE_CREATION_TIME];
         if($c->[COOKIE_EXPIRES]<=$time){
           # Found but expired by new cookie. Delete the cookie
@@ -655,7 +657,7 @@ method set_cookies($request_uri, @cookies){
 }
 
 
-method _get_cookies($request_uri, $same_site_status, $type, $method){
+method _get_cookies($request_uri, $flags) {
   my ($scheme, $authority, $path, $query, $fragment) =
   $request_uri =~ 
     m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
@@ -712,15 +714,15 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
          (!_path_match($path, $_))
          or ($_->[COOKIE_HOST_ONLY] and $rhost ne $_->[COOKIE_DOMAIN])
          or ($_->[COOKIE_SECURE] and $scheme ne "https")
-         or ($_->[COOKIE_HTTPONLY] and $type eq "non-HTTP");
+         or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
 
-    if(($same_site_status eq "cross-site") and ($_->[COOKIE_SAMESITE] ne "None")){
-      my $f=(($type eq "HTTP") and (($_->[COOKIE_SAMESITE] eq "Lax") or  ($_->[COOKIE_SAMESITE] eq "Default")));
-      my $g= $method  eq "GET" or $method eq "HEAD" or $method eq "OPTIONS" or $method eq "TRACE";
-      $g||=(
+    if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] ne "None")){
+      my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] eq "Lax") or  ($_->[COOKIE_SAMESITE] eq "Default")));
+      #my $g= $method  eq "GET" or $method eq "HEAD" or $method eq "OPTIONS" or $method eq "TRACE";
+      my $g=($flags & FLAG_SAFE_METH or (
         $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] eq "Default" 
         and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
-      );
+      ));
 
       #and ($browser_context
       #active context or top level traversable
@@ -760,24 +762,24 @@ method _get_cookies($request_uri, $same_site_status, $type, $method){
 
 }
 
-method get_cookies($request_uri, $same_site_status, $type){
+method get_cookies($request_uri, $flags){
   # Do a copy of the matching entries
   #
-  map [@$_], $self->_get_cookies($request_uri, $same_site_status, $type);
+  map [@$_], $self->_get_cookies($request_uri, $flags);
 }
 
 
 #TODO rename to retrieve_cookies?
-method encode_request_cookies($request_uri, $same_site_status="cross-site", $type="HTTP", $method="GET"){
-  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type, $method);
+method encode_request_cookies($request_uri, $flags=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH|FLAG_TOP_LEVEL){
+  my $cookies=$self->_get_cookies($request_uri, $flags);
   #return "" unless @$cookies;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 
 }
 
-method get_kv_cookies($request_uri, $same_site_status, $type){
+method get_kv_cookies($request_uri, $flags){
   
-  my $cookies=$self->_get_cookies($request_uri, $same_site_status, $type);
+  my $cookies=$self->_get_cookies($request_uri, $flags);
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
 
@@ -873,7 +875,6 @@ method clear{
 #   #jar->cookie_header($url)
 #     Retrieve cookies from jar and serialize for header
 
-# The referer and action are set to defaults
 *cookie_header=\*encode_request_cookies;
 *add=\*set_cookies;
 1;

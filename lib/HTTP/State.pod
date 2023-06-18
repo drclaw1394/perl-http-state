@@ -12,36 +12,46 @@ Importing and creating a Jar
   my $jar=HTTP::State->new;
 
 
-Add cookies from set_cookies strings into jar:
+Add cookies from Set_Cookies header values:
 
+  my $request_url="http://test.example.com";
   my $string1="name1=value; Max-Age=3600; Secure; SameSite=Lax";
   my $string2="name2=value; Max-Age=3600; Secure; SameSite=Lax";
 
-  $jar->set_cookies($url, $string1, $string2);
+  $jar->set_cookies($request_url, $string1, $string2, ...);
 
+  # or HTTP::CookieJar compatable API
+  $jar->add($request_url, $string1);
+  $jar->add($request_url, $string2);
+
+
+Simple (compatible) lookup matching cookies and encode (for sending to server)
+
+  my $request_url="http://test.example.com";
+  my $string=$jar->encode_request_cookies($request_url);
+
+  # or HTTP::CookieJar compatable API but no Same-Site processing
+  $jar->cookie_header($request_url);
+
+
+
+Secure lookup and encode (RFC6265bis) from user agent parameters:
+
+  my $request_url="http://test.example.com";
+  my $same_site_status="same-site"; #or "cross-site";
+  my $type="HTTP";                  # or "non-HTTP";
+  my $safe=1;                       # or 0 or undef
+  my $string=$jar->encode_request_cookies($request_url);
 
 Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
 
   # Structures and function for cookies
   use HTTP::State::Cookie;
+  my $request_url="http://test.example.com";
   my $cs1=cookie_struct(name=>"value");
   my $cs2=cookie_struct(name=>"value");
 
-  my $request_url="http://test.example.com";
-  $jar->set_cookies($request_url, $cs1, $cs2);
- 
-
-Lookup and Encoding Cookies (for sending to server)
-
-  my $request_url="http://www.mysite.com";
-  my $referer="http://thirdparty.site.com";
-
-  my $action= "top";      # Top level navigation 
-
-  # Encodes cookie name and values from cookies processed according to
-  # RFC6265bis 
-
-  my $string=$jar->encode_request_cookies($url, $referer, $action);
+  $jar->set_cookies($request_url, $cs1, $cs2, ...);
 
 Lookup and return Key value pairs (client side)
 
@@ -55,94 +65,142 @@ Lookup and return copies of cookie structures
 
 =head1 DESCRIPTION
 
-This module brings upto date processing and an alternative implementation of a
-Cookie Jar to manage HTTP State. It features:
+An up to date and fast (20x-30x than HTTP::CookieJar) pure Perl cookie
+processing module, implementing a RFC6265-bis-draft based "cookie jar" for HTTP
+client side applications.
+
+It provides a compatible interface to existing cookie jars, for a 'drop in'
+upgrade of performance and ease of migration into L<HTTP::Tiny> and L<LWP>.
+
+With limited changes to existing code, it provides some of the features of
+RFC6265bis:
 
 =over
 
-=item 
+=item public suffix checking
 
-=item samesite context processing (RFC-6265bis)
+=item prefix cookie name processing
 
-=item public suffix checking (RFC-6265bis)
-
-=item prefix cookie name processing. (RFC-6265bis)
-
-=item Upper limit of cookie expiry dates like the (Chrome browser)
+=item Upper limit of cookie expiry dates
 
 =back
 
-It order you most of these enhanced features, your user agent or client side
-program needs to 'opt in' by providing more information about 'actions' and
-'context' of a request.
+However, with a few additional arguments, a user-agent can specify the
+'browsing context' when retrieving cookies for full RFC6265bis processing:
 
-However if you just need a fast cookie jar an existing project, it is also
-backward compatiable with L<LWP> and L<HTTP::Tiny> interfaces that don't
-support these concepts just yet.
+=over
 
-Mozilla::PublicSuffix is used for public suffix database and is only loaded
-when actuall required.
+=item same site status
 
+=item API or HTTP
 
-=head3 PERFORMANCE
+=item safe method
+
+=back
+
+This does require the user agent to do additional book keeping of what is same
+site in respect to top level navigation, reloading, document etc. This module
+simply needs to know if request is same site (or not), http or api request, and
+if the method is safe (ie not POST or PUT).
+
+This module does not export any symbols and is intended to be use via an object
+orientated interface. For explicit encoding and decoding of cookie strings,
+please see the companion L<HTTP::State::Cookie> module.
 
 =head1 API
 
+=head2 Flags
+
+Flags are used to mark the intent of a request initiated by a user-agent. 
+
+=head3 FLAG_SAME_SITE
+
+When this flag is set, request is considered "same-site". When unset,
+request is considered "cross-site".
+
+=head3 FLAG_TYPE_HTTP
+
+When this flag is set, request is considered "HTTP". When unset,
+request is considered "non-HTTP".
+
+=head3 FLAG_SAFE_METH
+
+When this flag is set, request is considered "safe". When unset,
+request is considered "unsafe".
+
+=head3 FLAG_TOP_LEVEL
+
+When this flag is set, request is considered "top level". When unset,
+request is considered "not-top-level".
 
 
-=head3 cookie_struct
+=head2 Storing Cookies
 
-Create a cookie structure. The return is suitable for encode_set_cookie, or
-set_cookies. 
+=head3 add
 
-Takes a list of kv properties. The keys are either string names or fields or
-the constants for the fields. 
+  $jar->add($request_uri, $string_or_struct);
 
-The first pair of items is always the cookie name and the cookie value. 
 
-Subsequent attributes fields can be in any order.
-
-The first attibute keys is checked to see if its an attribute name (string) or
-a integer constant. The remaining field keys are assumed to be of the same
-perswasion 
-
-Normalizes expiry time if set, to GMT.
+Intended as L<HTTP::CookieJar> compatible interface. Adds a set-cookie string
+to the cookie jar. It is a wrapper around C<set_cookies>, with the C<$flags>
+argument set 'wide open'.
 
 =head3 set_cookies
 
-Takes Set-Cookie header string values or cookie_struct and inserts them into
-the cookie storage jar for the supplied url.
+  $jar->set_cookies($request_uri, $flags, $string_or_struct, ...);
 
-If path and domain attributes are calculated as per rfc 6525
+Takes a request url and one or more Set-Cookie header string values B<or>
+cookie_struct and inserts them into the cookie storage jar as per the 'storage
+model' of RFC6265bis.
+
+This method in intended to be called from a user-agent on receipt of a HTTP
+response.
+
+
+=head2 Retrieving Cookies
+
+=head3 cookie_header
+
+  $jar->cookie_header($request_url)
+
+Intended as L<HTTP::CookieJar> compatible interface. It is a wrapper around
+C<encode_request_cookies>, with the C<$flags> argument set 'wide open'.
+
+=head3 encode_request_cookies
+
+  $jar->encode_request_cookies($request_url);
+  $jar->encode_request_cookies($request_url, $flags); 
+
+Retrieves cookies applicable to the specified request_url, subject to
+RFC6265bis 'cookie retrievel', and encodes them into a string suitable for use
+in a Cookie header in a HTTP request.
+
+The C<$flags> argument encodes the state of the user agent 
 
 
 =head3 get_cookies
 
-Returns copies of matched cookies structs for further serialization or
-processing.
+  $jar->get_cookies($request_url);
+  $jar->get_cookies($request_url, $flags); 
+
+Takes the same arguments as C<encode_request_cookies> and matches the same
+cookies. Returns a copied list of the matched cookie structures instead of a
+encoded string.
 
 =head3 get_kv_cookies
 
-Return the matching cookie values as a key value list
+  $jar->get_kv_cookies($request_url);
+  $jar->get_kv_cookies($request_url, $same_site_status, $type, $safe);
 
-=cut
+Takes the same arguments as C<encode_request_cookies> and matches the same
+cookies. Returns a list of key value pairs, of names and values.
 
-=head3 encode_cookies
-
-Encodes all matching cookies for the current context into a Cookie header
-string
-
-
-
-=head3 decode_cookie
-
-Parses the Key value pairs from a Cookie header string. Convertes to a KV list
-
+=head2 File IO
 
 =head3 slurp_set_cookies
 
-Reads in previously spurted cookie strings from a file.  Tests incomming
-cookies for expiry or parsing errors.  Does not processs as normal set_cookie
+Reads in previously spurted cookie strings from a file.  Tests incoming
+cookies for expiry or parsing errors.  Does not process as normal set_cookie
 
 Cookies are processed and sorted as they are read in to reduce memory requirements.
 
@@ -165,9 +223,24 @@ Like C<suffix> but returns suffix with the next level down.
 Returns the highest domain which can be set by a (sub) domain, that isn't a top
 level domain/public suffix
 
+=head3 PERFORMANCE
+
+Cookie retrieval (100 random cookies added, 62 in jar):
+
+                   Rate http_cookiejar     http_state  protocol_http
+  http_cookiejar 58.0/s             --           -96%           -97%
+  http_state     1614/s          2682%             --           -19%
+  protocol_http  1987/s          3325%            23%             --
 
 =head1 COMPARISON TO OTHER MODULES
 
+L<Protocol::HTTP::CookieJar> is a very fast cookie jar module, also
+implementing RFC6265bis, though it requires a large number of XS modules to get
+going.
+
+L<HTTP::CookieJar> is the cookie jar suggested in the L<LWP> documentation.
+While it has public suffix support, it doesn't provide the additional
+conditions of RFC6265bis. It is also quite slow in comparison to this module.
 
 =head1 AUTHOR
 

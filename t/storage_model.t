@@ -23,7 +23,7 @@ use HTTP::State::Cookie ":all";
 
   my $url="$request_scheme://$request_host$request_path";
 
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url, 0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -57,7 +57,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url, 0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -75,7 +75,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url,0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -91,7 +91,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url,0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -107,13 +107,13 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url,0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie added";
   
   $string="name=value; SameSite=None; Secure; Max-Age=-1";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url,0xFF,  $string);
   @dump=$jar->dump_cookies;
 
   ok @dump == 0,  "Cookie expired";
@@ -128,13 +128,13 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url, 0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie added";
   
   $string="name=new_value; SameSite=None; Secure;";
-  $jar->set_cookies($url, $string);
+  $jar->set_cookies($url,0xFF,  $string);
   @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie updated";
