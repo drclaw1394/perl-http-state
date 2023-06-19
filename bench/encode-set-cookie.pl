@@ -12,7 +12,7 @@ use Protocol::HTTP::CookieJar;
 
 use Benchmark qw<cmpthese timethese>;
 use Data::Dumper;
-my $count=100;
+my $count=200;
 my $origin_count=$count;#1000;#$ARGV[0]//1;
 my $path_count=$count;#1000;
 my $cookie_count=$count;#1000;
@@ -159,7 +159,7 @@ cmpthese -1, {
 
   protocol_http=>sub {
     for(@samples){
-      my $array=$protocol_http_jar->find(my $url=URI::XS->new($urls[$_]), URI::XS->new($urls[$_]),Date::now(), Date::now());
+      my $array=$protocol_http_jar->find(my $url=URI::XS->new($urls[$_]), URI::XS->new($urls[$_]), Date::now(), Date::now());
       #say $url;
       #say "size : ". scalar @$array;
       #say "http_cookiejar: ".$string if $string;

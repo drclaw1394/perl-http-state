@@ -6,7 +6,7 @@ HTTP::State - RFC6265bis-draft-12 Cookie jar for HTTP Clients
 
 Importing and creating a Jar
 
-  use HTTP::State;          
+  use HTTP::State;
 
   my $jar=HTTP::State->new;
 
@@ -36,11 +36,11 @@ Simple (compatible) lookup matching cookies and encode (for sending to server)
 
 Secure lookup and encode (RFC6265bis) from user agent parameters:
 
+  use HTTP::State ":constants";
   my $request_url="http://test.example.com";
-  my $same_site_status="same-site"; #or "cross-site";
-  my $type="HTTP";                  # or "non-HTTP";
-  my $safe=1;                       # or 0 or undef
-  my $string=$jar->encode_request_cookies($request_url);
+
+  #Using the bit field to specifiy the request context information
+  my $string=$jar->encode_request_cookies($request_url, FLAG_SAME_SITE | FLAG_TOP_LEVEL);
 
 Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
 
@@ -64,28 +64,41 @@ Lookup and return copies of cookie structures
 
 =head1 DESCRIPTION
 
-An up to date and fast (20x-30x than HTTP::CookieJar) pure Perl cookie
-processing module, implementing a RFC6265-bis-draft based "cookie jar" for HTTP
-client side applications.
+A pure Perl and up to date comparatively fast (>20x than HTTP::CookieJar)
+cookie processing module. It implementing a RFC6265-bis-draft based "cookie
+jar" for HTTP user agents. At the time of writing the current draft is '12'.
 
-It provides a compatible interface to existing cookie jars, for a 'drop in'
-upgrade of performance and ease of migration into L<HTTP::Tiny> and L<LWP>.
+Default importing of the module does not import any symbols. If you 
+intend to use the extended RFC6265bis features, please import with
+":constants"  parameter for bit field masks.
 
-With limited changes to existing code, it provides some of the features of
-RFC6265bis:
+For explicit encoding and decoding of cookie strings (not via a cookie jar),
+please see the companion L<HTTP::State::Cookie> module. This is used internally
+for encoding and decoding cookies.
+
+=head2 Compatibility
+
+To ease integration, a compatibility interface shadowing L<HTTP::CookieJar> is
+provided. This in theory should allow user-agents like L<HTTP::Tiny> and L<LWP>
+to benefit from the security and performance gains in the module with limited
+changes to existing code.
+
+It is able to provide some of the features of RFC6265bis:
 
 =over
 
-=item public suffix checking
+=item Public suffix checking
 
-=item prefix cookie name processing
+=item Prefix cookie name processing
 
-=item Upper limit of cookie expiry dates
+=item Restricted upper limit of expiry dates
 
 =back
 
-However, with a few additional arguments, a user-agent can specify the
-'browsing context' when retrieving cookies for full RFC6265bis processing:
+=head2 Improved security/tracking reduction
+
+However, with a few additional flags, a user-agent can specify the 'browsing
+context' for more complete RFC6265bis processing:
 
 =over
 
@@ -95,16 +108,55 @@ However, with a few additional arguments, a user-agent can specify the
 
 =item safe method
 
+=item top level navigation
+
 =back
 
-This does require the user agent to do additional book keeping of what is same
-site in respect to top level navigation, reloading, document etc. This module
-simply needs to know if request is same site (or not), http or api request, and
-if the method is safe (ie not POST or PUT).
+This does require the user agent to perform additional book keeping of requests
+of what is same site request, top level navigation, reloading, document etc. 
 
-This module does not export any symbols and is intended to be use via an object
-orientated interface. For explicit encoding and decoding of cookie strings,
-please see the companion L<HTTP::State::Cookie> module.
+While these tests/conditions are specified in RFC6265bis, it is not in the
+scope of this module and needs to be implemented in a user-agent.  The results
+of such tests are represented as a bit field, which is used to guide the
+store/retrieve algorithm accordingly within this module.
+
+
+
+=head2 Algorithm
+
+Some specific design tricks are used to improve the storage and retrieval
+process compared to other cookie jars.
+
+=over 
+
+=item Keyed
+
+Cookies are uniquely identified by the domain, path, name and  host only flag
+(as per RFC6265bis). These are combined into a key, which make it easy to sort
+
+=item Reversed Domain Names
+
+The domain value (in the key and domain field) is stored in reverse, allowing
+the use of C<index> to do domain matching of the key directly as  prefix instead of a suffix.
+
+
+=item Cached public suffix
+
+Public suffix lookups are cached and also stored in reverse for direct
+substring comparison to domains.
+
+
+=item Binary Search
+
+Sorting and searching of the cookies is done firstly by 'second level domain'
+of a request url using binary search provided by L<List::Insertion>
+
+=item Internal 'capture'
+
+The main retrieval subroutine is actually a anonymous sub instead of an other
+method, for better argument reuse and no unneeded dynamic lookup.
+
+=back
 
 =head1 API
 

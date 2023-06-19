@@ -52,6 +52,7 @@ our %EXPORT_TAGS=("constants"=>\@const);
 
 class HTTP::State;
 
+field $_get_cookies_sub :reader;  # Main cookie retrieval routine, reference.
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field $_suffix_cache :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
@@ -59,6 +60,7 @@ field $_public_suffix_sub :param=undef;        # Sub used for public suffix look
 
 field $_lax_allowing_unsafe :param=undef;
 field $_lax_allowing_unsafe_timeout :param=120;
+field $_post_sort :param=undef;
 
 field $_max_expiry :param=400*24*3600; 
 
@@ -71,6 +73,9 @@ field @_domain;         #list of [dk, dv ] structure sorted by dk
                         # dv is a array of [pk, pv] which is sorted by pk
                         # pv is array of [cn, ca] which is sorted by cn
 field %_sld_cache;
+BUILD{
+  $self->_make_get_cookies;
+}
   
 method second_level_domain{
     unless($_public_suffix_sub){
@@ -146,10 +151,8 @@ method add {
 
 method set_cookies($request_uri, $flags, @cookies){
   #TODO: fix this
-  use Data::Dumper;
   Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
-  Log::OK::TRACE and log_trace __PACKAGE__. Dumper @cookies;
 
   return $self unless @cookies;
   # Parse the request_uri
@@ -183,7 +186,6 @@ method set_cookies($request_uri, $flags, @cookies){
     }
     next unless $c;
 
-    Log::OK::TRACE and log_trace "jar processing ".Dumper $c;
     #1.
     # A user agent MAY ignore a received cookie in its entirety. See Section 5.3.
 
@@ -494,7 +496,7 @@ method set_cookies($request_uri, $flags, @cookies){
       #4
       #Abort these steps and ignore the newly created cookie entirely.
 
-    if($c->[COOKIE_SAMESITE] != SAME_SITE_NONE){# "None"){
+    if($c->[COOKIE_SAMESITE] != SAME_SITE_NONE){
       if (not $flags & FLAG_TYPE_HTTP and not $flags & FLAG_SAME_SITE){
         next;
       }
@@ -514,7 +516,6 @@ method set_cookies($request_uri, $flags, @cookies){
     #19
     #If the cookie's "same-site-flag" is "None", abort these steps and ignore
     #the cookie entirely unless the cookie's secure-only-flag is true.
-    Log::OK::TRACE and log_trace __PACKAGE__. Dumper encode_set_cookie $c;
     next if $c->[COOKIE_SAMESITE] == SAME_SITE_NONE and !$c->[COOKIE_SECURE];
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 19 OK";
@@ -524,7 +525,7 @@ method set_cookies($request_uri, $flags, @cookies){
     #"__Secure-", abort these steps and ignore the cookie entirely unless the
     #cookie's secure-only-flag is true.
     #
-    next if $c->[COOKIE_NAME]=~/^__Secure-/i and !$c->[COOKIE_SECURE];
+    next if $c->[COOKIE_NAME]=~/^__Secure-/aai and !$c->[COOKIE_SECURE];
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 20 OK";
 
@@ -540,7 +541,7 @@ method set_cookies($request_uri, $flags, @cookies){
       #The cookie-attribute-list contains an attribute with an attribute-name
       #of "Path", and the cookie's path is /.
 
-    next if $c->[COOKIE_NAME]=~/^__Host-/i and !($c->[COOKIE_SECURE] and
+    next if $c->[COOKIE_NAME]=~/^__Host-/aai and !($c->[COOKIE_SECURE] and
       ($c->[COOKIE_PATH] eq "/") and $c->[COOKIE_HOST_ONLY]);
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 21 OK";
@@ -664,129 +665,122 @@ method set_cookies($request_uri, $flags, @cookies){
 }
 
 
-method _get_cookies($request_uri, $flags) {
-  my ($scheme, $authority, $path, $query, $fragment) =
-  $request_uri =~ 
-    m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+method _make_get_cookies{
+ $_get_cookies_sub=sub ($request_uri, $flags=$_default_flags) {
+    my ($scheme, $authority, $path, $query, $fragment) =
+    $request_uri =~ 
+      m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
 
-  my ($user, $password, $host, $port)=$authority =~  
-    m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
+    my ($user, $password, $host, $port)=$authority =~  
+      m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
 
-  $port//=80;
+    $port//=80;
 
-  # Look up the second level domain. This will be the root for our domain search
-  #
-  #my $sld=scalar reverse $self->suffix($host);
-  my $sld=$_sld_cache{$host}//=scalar reverse $self->second_level_domain($host);
-  my $rhost=scalar reverse $host;
-
-
-  # Iterate through all cookies until the domain no longer matches
-  #
-  my $time=time-$tz_offset;
-  my @output;
-
-  my $index=search_string_left $sld, \@_cookies;
-
-  Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
-  Log::OK::TRACE and log_trace  "looking for host: $sld";
-
-  local $_;
-
-  $index++ unless @_cookies;  # Force skip the test loop if no cookies in the jar
-
-  while( $index<@_cookies){
-    $_=$_cookies[$index];
-
-    # End the search when the $sld of request is no longer a prefix for the
-    # cookie domain being tested
-    last if index $_->[COOKIE_DOMAIN], $sld;
-
-    #say $_->[COOKIE_DOMAIN], " Request $request_uri";
-
-    # Process expire. Do not update $index
-    if($_->[COOKIE_EXPIRES] <= $time){
-      Log::OK::TRACE and log_trace "cookie under test expired. removing";
-      splice @_cookies, $index, 1;
-      next;
-    }
-
-
-
-
-    ## At this point we have a domain match ##
-
-    # Test for other restrictions...
-    $index++ and next if 
-         (!_path_match($path, $_))
-         or ($_->[COOKIE_HOST_ONLY] and $rhost ne $_->[COOKIE_DOMAIN])
-         or ($_->[COOKIE_SECURE] and $scheme ne "https")
-         or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
-
-    if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
-      my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)));
-      #my $g= $method  eq "GET" or $method eq "HEAD" or $method eq "OPTIONS" or $method eq "TRACE";
-      my $g=($flags & FLAG_SAFE_METH or (
-        $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
-        and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
-      ));
-
-      #and ($browser_context
-      #active context or top level traversable
-       
-    }
-
+    # Look up the second level domain. This will be the root for our domain search
     #
-    # If we get here, cookie should be included!
-    #Update last access time
+    #my $sld=scalar reverse $self->suffix($host);
+    my $sld=$_sld_cache{$host}//=scalar reverse $self->second_level_domain($host);
+    my $rhost=scalar reverse $host;
+
+
+    # Iterate through all cookies until the domain no longer matches
     #
-    $_->[COOKIE_LAST_ACCESS_TIME]=$time;
-    Log::OK::TRACE and log_trace "Pushing cookie";
-    push @output, $_;   
-    $index++;
-  }
-   
-  # TODO:
-  # Sort the output as recommended by RFC 6525
-  #  The user agent SHOULD sort the cookie-list in the following
-  #     order:
-  #
-  #     *  Cookies with longer paths are listed before cookies with
-  #        shorter paths.
-  #
-  #     *  Among cookies that have equal-length path fields, cookies with
-  #        earlier creation-times are listed before cookies with later
-  #        creation-times.
+    my $time=time-$tz_offset;
+    my @output;
 
-  ##########################################################################
-  # @output= sort {                                                        #
-  #         length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])        #
-  #           || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME] #
-  #     } @output;                                                         #
-  ##########################################################################
-      #say "df"; 
-  \@output;
+    my $index=search_string_left $sld, \@_cookies;
 
+    Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
+    Log::OK::TRACE and log_trace  "looking for host: $sld";
+
+    local $_;
+
+    $index++ unless @_cookies;  # Force skip the test loop if no cookies in the jar
+
+    while( $index<@_cookies){
+      $_=$_cookies[$index];
+
+      # End the search when the $sld of request is no longer a prefix for the
+      # cookie domain being tested
+      last if index $_->[COOKIE_DOMAIN], $sld;
+
+      # Process expire. Do not update $index
+      if($_->[COOKIE_EXPIRES] <= $time){
+        Log::OK::TRACE and log_trace "cookie under test expired. removing";
+        splice @_cookies, $index, 1;
+        next;
+      }
+
+
+
+
+      ## At this point we have a domain match ##
+
+      # Test for other restrictions...
+      $index++ and next if 
+           (!_path_match($path, $_))
+           or ($_->[COOKIE_HOST_ONLY] and $rhost ne $_->[COOKIE_DOMAIN])
+           or ($_->[COOKIE_SECURE] and $scheme ne "https")
+           or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
+
+      if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
+
+        my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)))
+          and($flags & FLAG_SAFE_METH or (
+          $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
+          and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
+        ))
+          and $flags &FLAG_TOP_LEVEL;
+      }
+
+      #
+      # If we get here, cookie should be included!
+      #Update last access time
+      #
+      $_->[COOKIE_LAST_ACCESS_TIME]=$time;
+      Log::OK::TRACE and log_trace "Pushing cookie";
+      push @output, $_;   
+      $index++;
+    }
+     
+    # TODO:
+    # Sort the output as recommended by RFC 6525
+    #  The user agent SHOULD sort the cookie-list in the following
+    #     order:
+    #
+    #     *  Cookies with longer paths are listed before cookies with
+    #        shorter paths.
+    #
+    #     *  Among cookies that have equal-length path fields, cookies with
+    #        earlier creation-times are listed before cookies with later
+    #        creation-times.
+
+    if($_post_sort){
+      @output= sort {
+            length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])
+              || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME]
+        } @output;
+    }
+    \@output;
+  };
 }
 
-method get_cookies($request_uri, $flags){
+method get_cookies{
   # Do a copy of the matching entries
   #
-  map [@$_], $self->_get_cookies($request_uri, $flags);
+  map [@$_], &$_get_cookies_sub;
 }
 
 
 #TODO rename to retrieve_cookies?
-my $def=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH|FLAG_TOP_LEVEL;
-method encode_request_cookies($request_uri, $flags=$def){
-  my $cookies=$self->_get_cookies($request_uri, $flags);
-  #return "" unless @$cookies;
+method encode_request_cookies{
+  my $cookies=&$_get_cookies_sub;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 
 }
 
-method get_kv_cookies($request_uri, $flags){
-  my $cookies=$self->_get_cookies($request_uri, $flags);
+method get_kv_cookies{#
+  my $cookies=&$_get_cookies_sub;
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
 
