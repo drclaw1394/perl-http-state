@@ -466,7 +466,7 @@ method set_cookies($request_uri, $flags, @cookies){
     #in the cookie-attribute-list with an attribute-name of "SameSite".
     #Otherwise, set the cookie's same-site-flag to "Default".
 
-    $c->[COOKIE_SAMESITE]//="Default";#$_default_same_site;
+    $c->[COOKIE_SAMESITE]//=SAME_SITE_DEFAULT;#"Default";#$_default_same_site;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 17 OK";
 
@@ -494,7 +494,7 @@ method set_cookies($request_uri, $flags, @cookies){
       #4
       #Abort these steps and ignore the newly created cookie entirely.
 
-    if($c->[COOKIE_SAMESITE] ne "None"){
+    if($c->[COOKIE_SAMESITE] != SAME_SITE_NONE){# "None"){
       if (not $flags & FLAG_TYPE_HTTP and not $flags & FLAG_SAME_SITE){
         next;
       }
@@ -515,7 +515,7 @@ method set_cookies($request_uri, $flags, @cookies){
     #If the cookie's "same-site-flag" is "None", abort these steps and ignore
     #the cookie entirely unless the cookie's secure-only-flag is true.
     Log::OK::TRACE and log_trace __PACKAGE__. Dumper encode_set_cookie $c;
-    next if $c->[COOKIE_SAMESITE] eq "None" and !$c->[COOKIE_SECURE];
+    next if $c->[COOKIE_SAMESITE] == SAME_SITE_NONE and !$c->[COOKIE_SECURE];
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 19 OK";
 
@@ -723,11 +723,11 @@ method _get_cookies($request_uri, $flags) {
          or ($_->[COOKIE_SECURE] and $scheme ne "https")
          or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
 
-    if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] ne "None")){
-      my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] eq "Lax") or  ($_->[COOKIE_SAMESITE] eq "Default")));
+    if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
+      my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)));
       #my $g= $method  eq "GET" or $method eq "HEAD" or $method eq "OPTIONS" or $method eq "TRACE";
       my $g=($flags & FLAG_SAFE_METH or (
-        $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] eq "Default" 
+        $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
         and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
       ));
 
@@ -777,7 +777,8 @@ method get_cookies($request_uri, $flags){
 
 
 #TODO rename to retrieve_cookies?
-method encode_request_cookies($request_uri, $flags=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH|FLAG_TOP_LEVEL){
+my $def=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH|FLAG_TOP_LEVEL;
+method encode_request_cookies($request_uri, $flags=$def){
   my $cookies=$self->_get_cookies($request_uri, $flags);
   #return "" unless @$cookies;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
@@ -785,7 +786,6 @@ method encode_request_cookies($request_uri, $flags=FLAG_SAME_SITE|FLAG_TYPE_HTTP
 }
 
 method get_kv_cookies($request_uri, $flags){
-  
   my $cookies=$self->_get_cookies($request_uri, $flags);
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }

@@ -1,6 +1,6 @@
 =head1 NAME
 
-HTTP::State - State (Cookie jar) for HTTP Clients
+HTTP::State - RFC6265bis-draft-12 Cookie jar for HTTP Clients
 
 =head1 SYNOPSIS
 

@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 package HTTP::State::Cookie;
+no warnings "experimental";
 # Logging
 #
 use Log::ger; 
@@ -23,11 +24,18 @@ my @days= qw(Sun Mon Tue Wed Thu Fri Sat);
 my %days= map {$_,$i++} @days;
 
 my @names;
-my @values;
+my @same_site_names;
+#my @values;
 my %const_names;
+my @pairs;
+my @same_site_pairs;
+
+my %reverse; 
+my %same_site_reverse;
+my @forward;
 
 BEGIN {
-	@names=qw<
+	 @names=qw<
 		Undef
 		Name
 		Value
@@ -46,22 +54,28 @@ BEGIN {
     Key
 
 	>;
-	@values= 0 .. @names-1;
 
-	my @same_site=qw<Lax Strict None Default>;
+  #@values= 0 .. @names-1;
 
-	my @pairs=
-		(map { (("COOKIE_".uc $names[$_])=~tr/-'/_/r, $values[$_]) } 0..@names-1),	#elements
-		(map {("SAME_SITE_".uc, $_)} @same_site)						#same site vals
-	;						
+  @same_site_names = qw<Undef Lax Strict None Default>;
 
-	%const_names=@pairs;
+  for my ($i)(0..$#names){
+		$const_names{("COOKIE_".uc $names[$i])=~tr/-/_/r}= $i;
+    $reverse{lc $names[$i]}=$i;
+  }
+  $reverse{undef}=0;			#catching
+
+
+  for my ($i)(0..$#same_site_names){
+    $const_names{"SAME_SITE_".uc $same_site_names[$i]}=$i;
+    $same_site_reverse{lc $same_site_names[$i]}=$i;
+  }
+  $same_site_reverse{undef}=0;			#catching
 }
 
 use constant \%const_names;
 
-my %reverse; @reverse{map lc, @names}=@values;
-$reverse{undef}=0;			#catching
+
 
 our @EXPORT_OK=(
   keys(%const_names),
@@ -254,19 +268,7 @@ sub decode_set_cookie{
   # Fix same site
   
   for($values[COOKIE_SAMESITE]//()){
-    $_=lc $_;
-    if($_ eq "none"){
-      $_="None";
-    }
-    elsif($_ eq "strict"){
-      $_="Strict";
-    }
-    elsif($_ eq "lax"){
-      $_= "Lax";
-    }
-    else {
-      $_="Default";
-    }
+    $_=$same_site_reverse{lc $_};
   }
   \@values;
 }
@@ -292,11 +294,13 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
   # Do Attributes with needing values.  Only add them if the attribute is
   # defined
   #
-	for my $index (COOKIE_MAX_AGE, COOKIE_PATH, COOKIE_SAMESITE){	
+	for my $index (COOKIE_MAX_AGE, COOKIE_PATH){
 		for($cookie->[$index]//()){
 			$string.="; $names[$index]=$_";
 		}
 	}
+
+  $string.="; $names[COOKIE_SAMESITE]=".$same_site_names[$cookie->[COOKIE_SAMESITE]] if $cookie->[COOKIE_SAMESITE];
 
 	
   # Format date for expires. Internally the cookie structure stores this value
