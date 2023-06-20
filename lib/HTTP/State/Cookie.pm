@@ -330,23 +330,22 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
 
 }
 
+#mosty for compatibility with HTTP::CookieJar 'cookies_for' method
 sub hash_set_cookie($cookie, $store_flag=undef){
 	my %hash=(name=>$cookie->[COOKIE_NAME], value=>$cookie->[COOKIE_VALUE]);
 
   # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute
   # if not defined.
   #
-  $hash{$names[COOKIE_DOMAIN]}=scalar reverse $_ 
+  $hash{domain}=scalar reverse $_ 
     for $cookie->[COOKIE_DOMAIN]//();
 
   # Do Attributes with needing values.  Only add them if the attribute is
   # defined
   #
-	for my $index (COOKIE_MAX_AGE, COOKIE_PATH, COOKIE_SAMESITE){	
-		for($cookie->[$index]//()){
-			$hash{$names[$index]}=$_;
-		}
-	}
+  $hash{maxage}=$_ for $cookie->[COOKIE_MAX_AGE]//();
+  $hash{path}=$_ for $cookie->[COOKIE_PATH]//();
+  $hash{samesite}=$_ for $cookie->[COOKIE_SAMESITE]//();
 
 	
   # Format date for expires. Internally the cookie structure stores this value
@@ -355,20 +354,20 @@ sub hash_set_cookie($cookie, $store_flag=undef){
   #
 	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
     my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $hash{Expires}="$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
+    $hash{expires}="$days[$wday], $mday $months[$mon] ".($year+1900) ." $hour:$min:$sec GMT";
 	}
 
   # Do flags (attibutes with no values)
   #
-	$hash{Secure}=1 if defined $cookie->[COOKIE_SECURE];				
-	$hash{HTTPOnly}=1 if defined $cookie->[COOKIE_HTTPONLY];
+	$hash{secure}=1 if defined $cookie->[COOKIE_SECURE];				
+	$hash{httponly}=1 if defined $cookie->[COOKIE_HTTPONLY];
 
   if($store_flag){
     # If asked for storage format, give internal values
     #
-	  $hash{"Host-Only"}=1 if defined $cookie->[COOKIE_HOST_ONLY];				
-	  $hash{"Creation-Time"}=$cookie->[COOKIE_CREATION_TIME];
-	  $hash{"Last-Access-Time"}=$cookie->[COOKIE_LAST_ACCESS_TIME];
+	  $hash{hostonly}=1 if defined $cookie->[COOKIE_HOST_ONLY];				
+	  $hash{creation_time}=$cookie->[COOKIE_CREATION_TIME];
+	  $hash{access_time}=$cookie->[COOKIE_LAST_ACCESS_TIME];
   }
 
 	\%hash;

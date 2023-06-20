@@ -1,6 +1,4 @@
 package HTTP::State;
-# Please refer to:
-# https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/02-Testing_for_Cookies_Attributes
 
 use feature "say";
 
@@ -74,6 +72,7 @@ field @_domain;         #list of [dk, dv ] structure sorted by dk
                         # pv is array of [cn, ca] which is sorted by cn
 field %_sld_cache;
 BUILD{
+  # Create the main lookup sub
   $self->_make_get_cookies;
 }
   
@@ -85,11 +84,12 @@ method second_level_domain{
 
     #search for  prefix 
     my $domain=lc $_[0];
-    my $highest;
+    my $highest="";
     my $suffix=$_suffix_cache
       ? $_suffix_cache->{$domain}//=&$_public_suffix_sub
       : &$_public_suffix_sub;
-      
+
+
     if($suffix){
       substr($domain, -(length($suffix)+1))="";
 
@@ -145,14 +145,12 @@ sub _path_match($path, $cookie){
 #returns self for chaining
 # TODO rename to "store_cookies"
 
-method add {
-  $self->set_cookies(shift, $_default_flags, @_);
-}
 
 method set_cookies($request_uri, $flags, @cookies){
   #TODO: fix this
   Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
+  Log::OK::TRACE and log_trace __PACKAGE__. " $request_uri, $flags, @cookies";
 
   return $self unless @cookies;
   # Parse the request_uri
@@ -342,7 +340,7 @@ method set_cookies($request_uri, $flags, @cookies){
     if($c->[COOKIE_DOMAIN]){
       if(0==index($rhost, $c->[COOKIE_DOMAIN])){ 
         # Domain must be at least substring (parent domain).
-        $c->[COOKIE_HOST_ONLY]=undef;
+        $c->[COOKIE_HOST_ONLY]=0;
       }
       else{
         # Reject. no domain match
@@ -723,14 +721,22 @@ method _make_get_cookies{
            or ($_->[COOKIE_SECURE] and $scheme ne "https")
            or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
 
-      if((not $flags & FLAG_SAME_SITE) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
+      if((not ($flags & FLAG_SAME_SITE)) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
 
-        my $f=(($flags & FLAG_TYPE_HTTP) and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)))
-          and($flags & FLAG_SAFE_METH or (
+
+
+        
+        my $f=(($flags & FLAG_TYPE_HTTP) 
+            and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) 
+                or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)
+                )
+        );
+        $f&&=(($flags & FLAG_SAFE_METH) or (
           $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
           and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
-        ))
-          and $flags &FLAG_TOP_LEVEL;
+        ));
+
+        $f&&=($flags & FLAG_TOP_LEVEL);
       }
 
       #
@@ -768,7 +774,7 @@ method _make_get_cookies{
 method get_cookies{
   # Do a copy of the matching entries
   #
-  map [@$_], &$_get_cookies_sub;
+  map [@$_], $_get_cookies_sub->&*;
 }
 
 
@@ -776,7 +782,6 @@ method get_cookies{
 method encode_request_cookies{
   my $cookies=&$_get_cookies_sub;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
-
 }
 
 method get_kv_cookies{#
@@ -784,50 +789,18 @@ method get_kv_cookies{#
   map(($_->[COOKIE_NAME], $_->[COOKIE_VALUE]), @$cookies);
 }
 
-method dump_cookies {
-  map encode_set_cookie($_, 1), @_cookies;
-}
 
 method db {
   \@_cookies;
 }
 
+
 method slurp_set_cookies($path) {
   open my $file, "<", $path 
     or die "Error opening file $path for reading";
 
-  my $c;
-  my $index;
-  my $time=time-$tz_offset;
-
   while(<$file>){
-    # Skip if parsing error
-    next unless $c=decode_set_cookie($_);
-  
-    # Don't load if cookie is expired
-    #
-    next if $c->[COOKIE_EXPIRES]<=$time;
-
-    # Build key for search
-    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOST_ONLY]";
-
-    # Do binary search
-    #
-    $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
-
-    # update the list
-    unless(@_cookies){
-      push @_cookies, $c;
-    }
-    else{
-      # If the key is identical, then we prefer the latest cookie,
-      # TODO: Fix key with scheme?
-      my $replace= ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])
-        ? 1
-        : 0;
-
-      splice @_cookies, $index, $replace, $c;
-    }
+    $self->load_cookies($_);
   }
 }
 
@@ -849,11 +822,6 @@ method spurt_set_cookies($path){
   }
 }
 
-# Returns self for chaining
-method clear{
-  @_cookies=(); #Clear the db
-  $self;
-}
 
 
 # Compatibility matrix
@@ -875,7 +843,69 @@ method clear{
 #
 #   #jar->cookie_header($url)
 #     Retrieve cookies from jar and serialize for header
+#
+#
+# Returns self for chaining
+method clear{
+  @_cookies=(); #Clear the db
+  $self;
+}
+method add {
+  $self->set_cookies(shift, $_default_flags, @_);
+}
 
-*cookie_header=\*encode_request_cookies;
-*add=\*set_cookies;
+method cookie_header {
+  splice @_,1, 0, $_default_flags;
+  say join "< ", @_;
+  my $cookies=&$_get_cookies_sub;
+  join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
+}
+
+method dump_cookies {
+  my $all=$_[0]?!$_[0]{persistent}:1;
+  map  encode_set_cookie($_, 1) , grep $_->[COOKIE_PERSISTENT]||$all, @_cookies;
+}
+
+method cookies_for{
+  my $cookies=&$_get_cookies_sub;
+  map hash_set_cookie($_,1), @$cookies;
+}
+
+#TODO: add test for bulk adding of strings and structs
+method load_cookies{
+  my $index;
+  my $time=time-$tz_offset;
+  for my $c (@_){
+    unless(ref $c){
+      # Skip if parsing error
+      next unless $c=decode_set_cookie($_);
+    }
+
+    # Don't load if cookie is expired
+    #
+    next if $c->[COOKIE_EXPIRES]<=$time;
+
+    # Build key for search
+    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOST_ONLY]";
+
+    # Do binary search
+    #
+    $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
+
+    # update the list
+    unless(@_cookies){
+      push @_cookies, $c;
+    }
+    else{
+      # If the key is identical, then we prefer the latest cookie,
+      # TODO: Fix key with scheme?
+      my $replace= ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])
+      ? 1
+      : 0;
+
+      splice @_cookies, $index, $replace, $c;
+    }
+  }
+}
+
 1;

@@ -66,7 +66,8 @@ Lookup and return copies of cookie structures
 
 A pure Perl and up to date comparatively fast (>20x than HTTP::CookieJar)
 cookie processing module. It implementing a RFC6265-bis-draft based "cookie
-jar" for HTTP user agents. At the time of writing the current draft is '12'.
+jar" for HTTP user agents. At the time of writing the current draft is '12'. As
+it progresses this module will be updated accordingly.
 
 Default importing of the module does not import any symbols. If you 
 intend to use the extended RFC6265bis features, please import with
