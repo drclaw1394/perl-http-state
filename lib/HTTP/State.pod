@@ -64,27 +64,12 @@ Lookup and return copies of cookie structures
 
 =head1 DESCRIPTION
 
-A pure Perl and up to date comparatively fast (>20x than HTTP::CookieJar)
-cookie processing module. It implementing a RFC6265-bis-draft based "cookie
-jar" for HTTP user agents. At the time of writing the current draft is '12'. As
-it progresses this module will be updated accordingly.
 
-Default importing of the module does not import any symbols. If you 
-intend to use the extended RFC6265bis features, please import with
-":constants"  parameter for bit field masks.
+An up to date cookie processing module, implementing a RFC6265-bis-draft based
+"cookie jar" for HTTP user agents.  At the time of writing the current draft is
+'12'. As it progresses this module will be updated accordingly.
 
-For explicit encoding and decoding of cookie strings (not via a cookie jar),
-please see the companion L<HTTP::State::Cookie> module. This is used internally
-for encoding and decoding cookies.
-
-=head2 Compatibility
-
-To ease integration, a compatibility interface shadowing L<HTTP::CookieJar> is
-provided. This in theory should allow user-agents like L<HTTP::Tiny> and L<LWP>
-to benefit from the security and performance gains in the module with limited
-changes to existing code.
-
-It is able to provide some of the features of RFC6265bis:
+A summary of cookie handling benefits from RFC6265bis include: 
 
 =over
 
@@ -93,15 +78,6 @@ It is able to provide some of the features of RFC6265bis:
 =item Prefix cookie name processing
 
 =item Restricted upper limit of expiry dates
-
-=back
-
-=head2 Improved security/tracking reduction
-
-However, with a few additional flags, a user-agent can specify the 'browsing
-context' for more complete RFC6265bis processing:
-
-=over
 
 =item same site status
 
@@ -113,15 +89,244 @@ context' for more complete RFC6265bis processing:
 
 =back
 
-This does require the user agent to perform additional book keeping of requests
-of what is same site request, top level navigation, reloading, document etc. 
+Default importing of the module does not import any symbols. If you intend to
+use the extended RFC6265bis features directly, please import with ":constants"
+parameter for bit field masks.
+
+For explicit encoding and decoding of cookie strings (not via a cookie jar),
+please see the companion L<HTTP::State::Cookie> module. This is used internally
+for encoding and decoding cookies.
+
+=head1 SAMESITE and CONTEXT
+
+It is necessary the user agent performs additional book keeping and testing
+of what is a 'same site' request, top level navigation, reloading, document etc
+to fully utilise the additional functionality available in this module.
 
 While these tests/conditions are specified in RFC6265bis, it is not in the
 scope of this module and needs to be implemented in a user-agent.  The results
-of such tests are represented as a bit field, which is used to guide the
+of such tests are represented as bit fields, which are used to guide the
 store/retrieve algorithm accordingly within this module.
 
 
+=head1 COMPATIBILITY
+
+A compatibility interface matching that of  L<HTTP::CookieJar> is available to
+aid in adoption of this module.
+
+This in theory should allow user-agents like L<HTTP::Tiny> and L<Furl> for
+example to benefit from performance and security improvements with limited
+changes to existing code.
+
+To work around the lack of same site / browsing context support in the
+L<HTTP::CookieJar> API, the compatibility API utilises the current values of
+the 'default flags' for the cookie jar. 
+
+
+
+=head1 API
+
+=head2 User Agent Context Flags
+
+Flags are used to mark the intent of a request initiated by a user-agent. 
+
+=head3 FLAG_SAME_SITE
+
+When this flag is set, request is considered "same-site". When unset, request
+is considered "cross-site".
+
+=head3 FLAG_TYPE_HTTP
+
+When this flag is set, request is considered "HTTP". When unset, request is
+considered "non-HTTP".
+
+=head3 FLAG_SAFE_METH
+
+When this flag is set, request is considered "safe". When unset, request is
+considered "unsafe".
+
+=head3 FLAG_TOP_LEVEL
+
+When this flag is set, request is considered "top level". When unset, request
+is considered "not-top-level".
+
+
+=head2 Storing and Retrieving
+
+For new code these methods are preferred.
+
+
+=head3 store_cookies
+
+  $jar->store_cookies($request_uri, $flags, $string_or_struct, ...);
+
+Takes a C<$request_url> and one or more Set-Cookie header string values B<or>
+cookie_struct and inserts them into the cookie storage jar as per the 'storage
+model' of RFC6265bis.
+
+The exact processing of the cookies is subject to the C<$flags> bit field,
+which is a combination of the 'context flags'. If set to C<undef> the current
+default bit flags for the cookie jar will be used.
+
+This method in intended to be called from a user-agent on receipt of a HTTP
+response.
+
+=head3 retrieve_cookies
+
+  $jar->retrieve_cookies($request_url, $flags); 
+
+Retrieves cookies from a jar, for the specified C<$request_url> according to
+RFC6265bis 'cookie retrieval'. The cookies are encodes them into a string
+suitable for use in a Cookie header in a HTTP request.
+
+The exact processing of the cookies is subject to the C<$flags> bit field,
+which is a combination of the 'context flags'. If set to C<undef> the current
+default bit flags for the cookie jar will be used.
+
+This method in intended to be called from a user-agent in generation of a HTTP
+request.
+
+
+
+=head3 dump_cookies
+
+  $jar->dump_cookies;
+  $jar->dump_cookies({persistent => 1});
+
+
+Returns a list of strings encoded as Set Cookie values, but with additional
+internal information.  The C<{persistent =E<gt> 1}> parameter forces only
+persistent cookies to be processed, ignoring session cookies.  
+
+B<Note:> This is only intended to generate strings which can processed later
+with C<load_cookies>.
+
+
+=head3 load_cookies
+
+  $jar->load_cookies(@cookies)
+
+Takes a list of Set-Cookie type strings written out previous with
+C<dump_cookies> and injects them into the cookie jar.
+
+B<Note:> This DOES support the internal fields generated by L<HTTP::CookieJar>
+to provide an easy way to upgrade an existing cookie jar file.
+
+Please refer to the L<HTTP::CookieJar> for further information.
+
+=head2 Auxillary
+
+=head3 get_cookies
+
+  $jar->get_cookies($request_url);
+  $jar->get_cookies($request_url, $flags); 
+
+Takes the same arguments as C<retrieve_cookies> and matches the same cookies.
+Returns a copied list of the matched cookie structures instead of a encoded
+string.
+
+=head3 get_kv_cookies
+
+  $jar->get_kv_cookies($request_url);
+  $jar->get_kv_cookies($request_url, $same_site_status, $type, $safe);
+
+Takes the same arguments as C<retrieve_cookies> and matches the same cookies.
+Returns a list of key value pairs, of names and values.
+
+=head3 suffix
+
+Wrapper around the public suffix sub. Caches results for fast subsequent
+lookups. Looks up a public suffix for a given domain
+
+
+=head3 second_level_domain
+
+Like C<suffix> but returns suffix with the next level down. 
+Returns the highest domain which can be set by a (sub) domain, that isn't a top
+level domain/public suffix
+
+=head2 File IO
+
+=head3 slurp_set_cookies
+
+Reads in previously spurted cookie strings from a file.  Tests incoming
+cookies for expiry or parsing errors.  Does not process as normal set_cookie
+
+Cookies are processed and sorted as they are read in to reduce memory requirements.
+
+
+=head3 spurt_set_cookies
+
+Writes out the contents of the database as set cookie strings, with additional
+internal fields included.  Ignores any expired or session cookies
+
+
+
+=head2 HTTP::CookieJar Compatibility Interface
+
+These methods of the same name an intent as those found in L<HTTP::CookieJar>.
+There are most certainly minor differences, but should allow a L<HTTP::State>
+cookie jar to be a drop in replacement in most circumstances a
+L<HTTP::CookieJar> is used. 
+
+Support is included to B<parse> the contents of a cookie jar file created with
+L<HTTP::CookieJar>, however no support is included in B<generating> a backward
+compatible file. 
+
+=head3 add
+
+    $jar->add($url, $set_cookie_string);
+
+Adds a cookie (as a Set_Cookie value string C<$set_cookie_string>) to the
+cookie jar targeted at C<$url>. 
+
+B<Note on SAME SITE:> It is a compatibility wrapper around C<set_cookies>
+utilising the default flags for the jar, as no flags for same site support can
+be supplied directly.
+
+Please refer to the L<HTTP::CookieJar> for further information.
+
+
+=head3 clear
+
+  $jar->clear;
+
+Removes all cookies from the jar
+
+=head3 cookies_for
+
+  $jar->cookies_for($url);
+  $jar->cookies_for($url);
+
+Returns a list of hash refs representing a set cookie for a target C<$url>. The
+elements of each hash are named as per L<HTTP::CookieJar>. Additional elements
+could also exist (ie samesite)
+
+Please refer to the L<HTTP::CookieJar> for further information.
+
+=head3 cookie_header
+
+  $jar->cookie_header($url)
+
+Retrieves any applicable cookies for the target C<$url>, and encodes into a
+Cookie header string value.
+
+B<Note on SAME SITE:> It is a compatibility wrapper around
+C<encode_request_cookies> utilising the default flags for the jar, as no flags
+for same site support can be supplied directly.
+
+Please refer to the L<HTTP::CookieJar> for further information.
+
+
+=head3 dump_cookies
+
+Please refer to the L<HTTP::CookieJar> for further information.
+  
+=head3 load_cookies
+
+Please refer to the L<HTTP::CookieJar> for further information.
+
+=head3 PERFORMANCE
 
 =head2 Algorithm
 
@@ -158,122 +363,6 @@ The main retrieval subroutine is actually a anonymous sub instead of an other
 method, for better argument reuse and no unneeded dynamic lookup.
 
 =back
-
-=head1 API
-
-=head2 Flags
-
-Flags are used to mark the intent of a request initiated by a user-agent. 
-
-=head3 FLAG_SAME_SITE
-
-When this flag is set, request is considered "same-site". When unset, request
-is considered "cross-site".
-
-=head3 FLAG_TYPE_HTTP
-
-When this flag is set, request is considered "HTTP". When unset, request is
-considered "non-HTTP".
-
-=head3 FLAG_SAFE_METH
-
-When this flag is set, request is considered "safe". When unset, request is
-considered "unsafe".
-
-=head3 FLAG_TOP_LEVEL
-
-When this flag is set, request is considered "top level". When unset, request
-is considered "not-top-level".
-
-=head2 Storing Cookies
-
-=head3 add
-
-  $jar->add($request_uri, $string_or_struct);
-
-
-Intended as L<HTTP::CookieJar> compatible interface. Adds a set-cookie string
-to the cookie jar. It is a wrapper around C<set_cookies>, with the C<$flags>
-argument set 'wide open'.
-
-=head3 set_cookies
-
-  $jar->set_cookies($request_uri, $flags, $string_or_struct, ...);
-
-Takes a request url and one or more Set-Cookie header string values B<or>
-cookie_struct and inserts them into the cookie storage jar as per the 'storage
-model' of RFC6265bis.
-
-This method in intended to be called from a user-agent on receipt of a HTTP
-response.
-
-
-=head2 Retrieving Cookies
-
-=head3 cookie_header
-
-  $jar->cookie_header($request_url)
-
-Intended as L<HTTP::CookieJar> compatible interface. It is a wrapper around
-C<encode_request_cookies>, with the C<$flags> argument set 'wide open'.
-
-=head3 encode_request_cookies
-
-  $jar->encode_request_cookies($request_url);
-  $jar->encode_request_cookies($request_url, $flags); 
-
-Retrieves cookies applicable to the specified request_url, subject to
-RFC6265bis 'cookie retrieval', and encodes them into a string suitable for use
-in a Cookie header in a HTTP request.
-
-The C<$flags> argument encodes the state of the user agent.
-
-=head3 get_cookies
-
-  $jar->get_cookies($request_url);
-  $jar->get_cookies($request_url, $flags); 
-
-Takes the same arguments as C<encode_request_cookies> and matches the same
-cookies. Returns a copied list of the matched cookie structures instead of a
-encoded string.
-
-=head3 get_kv_cookies
-
-  $jar->get_kv_cookies($request_url);
-  $jar->get_kv_cookies($request_url, $same_site_status, $type, $safe);
-
-Takes the same arguments as C<encode_request_cookies> and matches the same
-cookies. Returns a list of key value pairs, of names and values.
-
-=head2 File IO
-
-=head3 slurp_set_cookies
-
-Reads in previously spurted cookie strings from a file.  Tests incoming
-cookies for expiry or parsing errors.  Does not process as normal set_cookie
-
-Cookies are processed and sorted as they are read in to reduce memory requirements.
-
-
-=head3 spurt_set_cookies
-
-Writes out the contents of the database as set cookie strings, with additional
-internal fields included.  Ignores any expired or session cookies
-
-
-=head3 suffix
-
-Wrapper around the public suffix sub. Caches results for fast subsequent
-lookups. Looks up a public suffix for a given domain
-
-
-=head3 second_level_domain
-
-Like C<suffix> but returns suffix with the next level down. 
-Returns the highest domain which can be set by a (sub) domain, that isn't a top
-level domain/public suffix
-
-=head3 PERFORMANCE
 
 Cookie retrieval (100 random cookies added, 62 in jar):
 

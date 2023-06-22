@@ -143,11 +143,11 @@ sub _path_match($path, $cookie){
 }
 
 #returns self for chaining
-# TODO rename to "store_cookies"
 
 
 method set_cookies($request_uri, $flags, @cookies){
   #TODO: fix this
+  $flags//=$_default_flags;
   Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
   Log::OK::TRACE and log_trace __PACKAGE__. " $request_uri, $flags, @cookies";
@@ -340,7 +340,7 @@ method set_cookies($request_uri, $flags, @cookies){
     if($c->[COOKIE_DOMAIN]){
       if(0==index($rhost, $c->[COOKIE_DOMAIN])){ 
         # Domain must be at least substring (parent domain).
-        $c->[COOKIE_HOST_ONLY]=0;
+        $c->[COOKIE_HOSTONLY]=0;
       }
       else{
         # Reject. no domain match
@@ -350,7 +350,7 @@ method set_cookies($request_uri, $flags, @cookies){
     }
     else{
       Log::OK::TRACE and log_trace __PACKAGE__. " No domain set for cookie";
-      $c->[COOKIE_HOST_ONLY]=1;
+      $c->[COOKIE_HOSTONLY]=1;
       $c->[COOKIE_DOMAIN]=$rhost;
     }
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 10 OK";
@@ -540,7 +540,7 @@ method set_cookies($request_uri, $flags, @cookies){
       #of "Path", and the cookie's path is /.
 
     next if $c->[COOKIE_NAME]=~/^__Host-/aai and !($c->[COOKIE_SECURE] and
-      ($c->[COOKIE_PATH] eq "/") and $c->[COOKIE_HOST_ONLY]);
+      ($c->[COOKIE_PATH] eq "/") and $c->[COOKIE_HOSTONLY]);
 
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 21 OK";
 
@@ -615,7 +615,7 @@ method set_cookies($request_uri, $flags, @cookies){
 
     # Build key to perform binary search in database. This key is unique in the database
     #
-    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOST_ONLY]";
+    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOSTONLY]";
     $c->[COOKIE_MAX_AGE]=undef; # No longer need this, so 
     Log::OK::TRACE and log_trace __PACKAGE__."::set_cookie key: $c->[COOKIE_KEY]";
 
@@ -661,6 +661,8 @@ method set_cookies($request_uri, $flags, @cookies){
   }
   return $self;
 }
+
+*store_cookies=\&set_cookies;
 
 
 method _make_get_cookies{
@@ -717,7 +719,7 @@ method _make_get_cookies{
       # Test for other restrictions...
       $index++ and next if 
            (!_path_match($path, $_))
-           or ($_->[COOKIE_HOST_ONLY] and $rhost ne $_->[COOKIE_DOMAIN])
+           or ($_->[COOKIE_HOSTONLY] and $rhost ne $_->[COOKIE_DOMAIN])
            or ($_->[COOKIE_SECURE] and $scheme ne "https")
            or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
 
@@ -783,6 +785,7 @@ method encode_request_cookies{
   my $cookies=&$_get_cookies_sub;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 }
+*retrieve_cookies=\&encode_request_cookies;
 
 method get_kv_cookies{#
   my $cookies=&$_get_cookies_sub;
@@ -886,7 +889,7 @@ method load_cookies{
     next if $c->[COOKIE_EXPIRES]<=$time;
 
     # Build key for search
-    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOST_ONLY]";
+    $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOSTONLY]";
 
     # Do binary search
     #

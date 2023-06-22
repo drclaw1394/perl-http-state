@@ -44,15 +44,14 @@ BEGIN {
 		Domain
 		Path
 		Secure
-		HTTPOnly
+		HttpOnly
 		SameSite
     
-    Creation-Time
-    Last-Access-Time
+    Creation_Time
+    Last_Access_Time
     Persistent
-    Host-Only
+    HostOnly
     Key
-
 	>;
 
   #@values= 0 .. @names-1;
@@ -64,6 +63,8 @@ BEGIN {
     $reverse{lc $names[$i]}=$i;
   }
   $reverse{undef}=0;			#catching
+
+  #Additional keys in hash for HTTP::CookieJar support
 
 
   for my ($i)(0..$#same_site_names){
@@ -100,7 +101,7 @@ our @EXPORT=("cookie_struct");
 
 
 use Time::Piece;
-use Time::Local qw<timegm_modern>;
+use Time::Local qw<timegm_modern timelocal_modern>;
 
 my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 
@@ -111,8 +112,6 @@ sub cookie_struct {
   no warnings "experimental";
   my @c=(1, shift, shift);  # Reuse the first field as string/int marker
 
-  #$c[COOKIE_NAME]=shift;
-  #$c[COOKIE_VALUE]=shift;
 
   die "Cookie must have a name" unless $c[COOKIE_NAME];
 
@@ -137,8 +136,11 @@ sub cookie_struct {
       }
     }
 
+    say "EXPIRED IS SET" if defined $c[COOKIE_EXPIRES];
+
     $c[COOKIE_EXPIRES]-=$tz_offset if defined $c[COOKIE_EXPIRES];
     $c[COOKIE_DOMAIN]=scalar reverse $c[COOKIE_DOMAIN] if $c[COOKIE_DOMAIN];
+
   }
 
   # Remove any extra fields added in haste
@@ -241,6 +243,7 @@ sub decode_set_cookie{
   # Fix the date. Date is stored in seconds internally
   #
   for($values[COOKIE_EXPIRES]//()){
+    Log::OK::TRACE and log_trace " converting cookie expires from stamp to epoch";
     my ($wday_key, $mday, $mon_key, $year, $hour, $min, $sec, $tz)=
      /([^,]+), (\d+).([^-]{3}).(\d{4}) (\d+):(\d+):(\d+) (\w+)/;
      #TODO support parsing of other deprecated data formats
@@ -254,7 +257,11 @@ sub decode_set_cookie{
     else{
       #year as is
     }
-    $_ = timegm_modern($sec, $min, $hour, $mday, $months{$mon_key}, $year);
+    #NOTE: timelocal_modern DOES NOT add/subtract time offset. Which is what we want
+    #as the time is already gmt
+    #
+    $_ = timelocal_modern($sec, $min, $hour, $mday, $months{$mon_key}, $year);
+    #$_ = timegm_modern($sec, $min, $hour, $mday, $months{$mon_key}, $year);
   }
 
 
@@ -307,10 +314,20 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
   # in terms of GMT.
   # Again only add the attribute if value is defined
   #
-	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $string.="; $names[COOKIE_EXPIRES]=$days[$wday], $mday-$months[$mon]-".($year+1900) ." $hour:$min:$sec GMT";
+  #for($cookie->[COOKIE_PERSISTENT] && 
+  for($cookie->[COOKIE_EXPIRES]//()){
+    if($store_flag){
+      $string.="; $names[COOKIE_EXPIRES]=$_";
+    }
+    else{
+      #
+      #NOTE: localtime doesn't add/subtract offsets. This is what we want as it was manually adjusted.
+      #
+      my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =localtime $_;
+      $string.="; $names[COOKIE_EXPIRES]=$days[$wday], ".sprintf("%02d",$mday)." $months[$mon] ".($year+1900) .sprintf(" %02d:%02d:%02d", $hour,$min,$sec)." GMT";
+    }
 	}
+
 
   # Do flags (attibutes with no values)
   #
@@ -320,9 +337,9 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
   if($store_flag){
     # If asked for storage format, give internal values
     #
-	  $string.="; Host-Only" if defined $cookie->[COOKIE_HOST_ONLY];				
-	  $string.="; Creation-Time=$cookie->[COOKIE_CREATION_TIME]";
-	  $string.="; Last-Access-Time=$cookie->[COOKIE_LAST_ACCESS_TIME]";
+	  $string.="; HostOnly" if defined $cookie->[COOKIE_HOSTONLY];				
+	  $string.="; Creation_Time=$cookie->[COOKIE_CREATION_TIME]";
+	  $string.="; Last_Access_Time=$cookie->[COOKIE_LAST_ACCESS_TIME]";
 	  $string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
   }
 
@@ -353,8 +370,13 @@ sub hash_set_cookie($cookie, $store_flag=undef){
   # Again only add the attribute if value is defined
   #
 	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =gmtime $_;
-    $hash{expires}="$days[$wday], $mday $months[$mon] ".($year+1900) ." $hour:$min:$sec GMT";
+    if($store_flag){
+      $hash{expires}=$_;
+    }
+    else{
+      my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =localtime $_;
+      $hash{expires}="$days[$wday], ".sprintf("%02d",$mday)." $months[$mon] ".($year+1900) .sprintf(" %02d:%02d:%02d",$hour,$min,$sec)." GMT";
+    }
 	}
 
   # Do flags (attibutes with no values)
@@ -365,12 +387,11 @@ sub hash_set_cookie($cookie, $store_flag=undef){
   if($store_flag){
     # If asked for storage format, give internal values
     #
-	  $hash{hostonly}=1 if defined $cookie->[COOKIE_HOST_ONLY];				
+	  $hash{hostonly}=1 if defined $cookie->[COOKIE_HOSTONLY];				
 	  $hash{creation_time}=$cookie->[COOKIE_CREATION_TIME];
 	  $hash{access_time}=$cookie->[COOKIE_LAST_ACCESS_TIME];
   }
 
 	\%hash;
 }
-
 1;
