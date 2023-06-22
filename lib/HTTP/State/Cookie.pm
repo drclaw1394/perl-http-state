@@ -264,6 +264,13 @@ sub decode_set_cookie{
     #$_ = timegm_modern($sec, $min, $hour, $mday, $months{$mon_key}, $year);
   }
 
+  # adjust creation and last modified times
+  if(defined $_[1]){
+    $values[COOKIE_CREATION_TIME]-=$_[1];
+    $values[COOKIE_LAST_ACCESS_TIME]-=$_[1];
+
+  }
+
 
   # Fix leading/trailing dot
   for($values[COOKIE_DOMAIN]//()){
@@ -292,6 +299,21 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
   #
 	my $string= "$cookie->[COOKIE_NAME]=".($cookie->[COOKIE_VALUE]//"");			
 
+
+
+	
+  # Format date for expires. Internally the cookie structure stores this value
+  # in terms of GMT.
+  # Again only add the attribute if value is defined
+  #
+  #for($cookie->[COOKIE_PERSISTENT] && 
+  for($cookie->[COOKIE_EXPIRES]//()){
+      #
+      #NOTE: localtime doesn't add/subtract offsets. This is what we want as it was manually adjusted.
+      #
+      my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =localtime $_;
+      $string.="; $names[COOKIE_EXPIRES]=$days[$wday], ".sprintf("%02d",$mday)." $months[$mon] ".($year+1900) .sprintf(" %02d:%02d:%02d", $hour,$min,$sec)." GMT";
+	}
   # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute
   # if not defined.
   #
@@ -307,41 +329,21 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
 		}
 	}
 
-  $string.="; $names[COOKIE_SAMESITE]=".$same_site_names[$cookie->[COOKIE_SAMESITE]] if $cookie->[COOKIE_SAMESITE];
-
-	
-  # Format date for expires. Internally the cookie structure stores this value
-  # in terms of GMT.
-  # Again only add the attribute if value is defined
-  #
-  #for($cookie->[COOKIE_PERSISTENT] && 
-  for($cookie->[COOKIE_EXPIRES]//()){
-    if($store_flag){
-      $string.="; $names[COOKIE_EXPIRES]=$_";
-    }
-    else{
-      #
-      #NOTE: localtime doesn't add/subtract offsets. This is what we want as it was manually adjusted.
-      #
-      my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =localtime $_;
-      $string.="; $names[COOKIE_EXPIRES]=$days[$wday], ".sprintf("%02d",$mday)." $months[$mon] ".($year+1900) .sprintf(" %02d:%02d:%02d", $hour,$min,$sec)." GMT";
-    }
-	}
-
 
   # Do flags (attibutes with no values)
   #
 	$string.="; $names[COOKIE_SECURE]" if defined $cookie->[COOKIE_SECURE];				
 	$string.="; $names[COOKIE_HTTPONLY]" if defined $cookie->[COOKIE_HTTPONLY];
 
-  if($store_flag){
+  if(defined $store_flag){
     # If asked for storage format, give internal values
     #
+	  $string.="; Creation_Time=".($cookie->[COOKIE_CREATION_TIME]+$store_flag);
+	  $string.="; Last_Access_Time=".($cookie->[COOKIE_LAST_ACCESS_TIME]+$store_flag);
 	  $string.="; HostOnly" if defined $cookie->[COOKIE_HOSTONLY];				
-	  $string.="; Creation_Time=$cookie->[COOKIE_CREATION_TIME]";
-	  $string.="; Last_Access_Time=$cookie->[COOKIE_LAST_ACCESS_TIME]";
-	  $string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
+    #$string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
   }
+  $string.="; $names[COOKIE_SAMESITE]=".$same_site_names[$cookie->[COOKIE_SAMESITE]] if $cookie->[COOKIE_SAMESITE];
 
 	$string;
 
@@ -370,13 +372,8 @@ sub hash_set_cookie($cookie, $store_flag=undef){
   # Again only add the attribute if value is defined
   #
 	for($cookie->[COOKIE_PERSISTENT] && $cookie->[COOKIE_EXPIRES]//()){
-    if($store_flag){
-      $hash{expires}=$_;
-    }
-    else{
       my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) =localtime $_;
       $hash{expires}="$days[$wday], ".sprintf("%02d",$mday)." $months[$mon] ".($year+1900) .sprintf(" %02d:%02d:%02d",$hour,$min,$sec)." GMT";
-    }
 	}
 
   # Do flags (attibutes with no values)
@@ -384,12 +381,12 @@ sub hash_set_cookie($cookie, $store_flag=undef){
 	$hash{secure}=1 if defined $cookie->[COOKIE_SECURE];				
 	$hash{httponly}=1 if defined $cookie->[COOKIE_HTTPONLY];
 
-  if($store_flag){
+  if(defined $store_flag){
     # If asked for storage format, give internal values
     #
 	  $hash{hostonly}=1 if defined $cookie->[COOKIE_HOSTONLY];				
-	  $hash{creation_time}=$cookie->[COOKIE_CREATION_TIME];
-	  $hash{access_time}=$cookie->[COOKIE_LAST_ACCESS_TIME];
+	  $hash{creation_time}=($cookie->[COOKIE_CREATION_TIME]+$store_flag);
+	  $hash{access_time}=($cookie->[COOKIE_LAST_ACCESS_TIME]+$store_flag);
   }
 
 	\%hash;

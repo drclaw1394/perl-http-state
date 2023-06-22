@@ -80,7 +80,7 @@ my @urls;
 
 #say "Query set is: ", join "\n", @urls;
 
-my $http_state_jar=HTTP::State->new;#(suffix_cache=>{});
+my $http_state_jar=HTTP::State->new(post_sort=>1);#(suffix_cache=>{});
 my $http_cookiejar=HTTP::CookieJar->new;
 my $protocol_http_jar=Protocol::HTTP::CookieJar->new;
 

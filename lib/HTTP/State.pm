@@ -859,30 +859,26 @@ method add {
 
 method cookie_header {
   splice @_,1, 0, $_default_flags;
-  say join "< ", @_;
   my $cookies=&$_get_cookies_sub;
-  join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 }
 
 method dump_cookies {
   my $all=$_[0]?!$_[0]{persistent}:1;
-  map  encode_set_cookie($_, 1) , grep $_->[COOKIE_PERSISTENT]||$all, @_cookies;
+  map  encode_set_cookie($_, $tz_offset) , grep $_->[COOKIE_PERSISTENT]||$all, @_cookies;
 }
 
 method cookies_for{
   my $cookies=&$_get_cookies_sub;
-  map hash_set_cookie($_,1), @$cookies;
+  map hash_set_cookie($_, 1), @$cookies;
 }
 
 #TODO: add test for bulk adding of strings and structs
 method load_cookies{
   my $index;
   my $time=time-$tz_offset;
-  for my $c (@_){
-    unless(ref $c){
-      # Skip if parsing error
-      next unless $c=decode_set_cookie($_);
-    }
+  my $c;
+  for my $s (@_){
+    next unless $c=decode_set_cookie($s, $tz_offset);
 
     # Don't load if cookie is expired
     #
