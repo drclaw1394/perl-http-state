@@ -28,11 +28,8 @@ use List::Insertion {type=>"string", duplicate=>"left", accessor=>"->[".COOKIE_K
 
 # Date 
 use Time::Piece;
-use Time::Local qw<timegm_modern>;
-
 my $tz_offset=Time::Piece->localtime->tzoffset->seconds;
 
-use feature "signatures";
 
 # Constant flags foor User agent context
 #
@@ -54,6 +51,7 @@ field $_get_cookies_sub :reader;  # Main cookie retrieval routine, reference.
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field $_suffix_cache :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
+field $_second_level_domain_sub;
 #field $_default_same_site :param="None";
 
 field $_lax_allowing_unsafe :param=undef;
@@ -64,30 +62,20 @@ field $_max_expiry :param=400*24*3600;
 
 field $_default_flags :param=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH;
 
-# Algorithm structures
-# Array of arrays acting as key value tuples. Domain sorted in reverse order
-#
-field @_domain;         #list of [dk, dv ] structure sorted by dk
-                        # dv is a array of [pk, pv] which is sorted by pk
-                        # pv is array of [cn, ca] which is sorted by cn
 field %_sld_cache;
+
 BUILD{
   # Create the main lookup sub
   $self->_make_get_cookies;
-}
-  
-method second_level_domain{
-    unless($_public_suffix_sub){
-      require Mozilla::PublicSuffix;  
-      $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
-    }
-
-    #search for  prefix 
-    my $domain=lc $_[0];
+  unless($_public_suffix_sub){
+    require Mozilla::PublicSuffix;  
+    $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
+  }
+  $_suffix_cache//={};
+  $_second_level_domain_sub=sub {
+    my $domain=$_[0];#lc $_[0];
     my $highest="";
-    my $suffix=$_suffix_cache
-      ? $_suffix_cache->{$domain}//=&$_public_suffix_sub
-      : &$_public_suffix_sub;
+    my $suffix=$_suffix_cache->{$domain}//=&$_public_suffix_sub;
 
 
     if($suffix){
@@ -99,23 +87,12 @@ method second_level_domain{
       }
     }
     $highest;
+
+  };
 }
-
-method suffix{
-  unless($_public_suffix_sub){
-    require Mozilla::PublicSuffix;
-    $_public_suffix_sub=\&Mozilla::PublicSuffix::public_suffix;
-  }
-  $_suffix_cache
-    ? $_suffix_cache->{lc $_[0]}//=&$_public_suffix_sub
-    : &$_public_suffix_sub;
-}
-
-
-
-
-
-sub _path_match($path, $cookie){
+  
+sub _path_match {
+  my($path, $cookie)=@_;
 
   # Process path matching as per section 5.1.4 in RFC 6265
   #
@@ -145,10 +122,11 @@ sub _path_match($path, $cookie){
 #returns self for chaining
 
 
-method set_cookies($request_uri, $flags, @cookies){
+method store_cookies{
+  my ($request_uri, $flags, @cookies)=@_;
   #TODO: fix this
   $flags//=$_default_flags;
-  Log::OK::TRACE and log_trace __PACKAGE__. " set_cookies";
+  Log::OK::TRACE and log_trace __PACKAGE__. " store_cookies";
   Log::OK::TRACE and log_trace __PACKAGE__. " ".join ", ", caller;
   Log::OK::TRACE and log_trace __PACKAGE__. " $request_uri, $flags, @cookies";
 
@@ -304,9 +282,10 @@ method set_cookies($request_uri, $flags, @cookies){
     # DO a public suffix check on cookies. Need to ensure the domain for the cookie is NOT a suffix.
     # This means we want a 'second level domain'
     #
-    #$sld=$_sld_cache{$c->[COOKIE_DOMAIN]}//=scalar reverse $self->second_level_domain(scalar reverse $c->[COOKIE_DOMAIN]);
     if($c->[COOKIE_DOMAIN]){
-      $suffix=$_suffix_cache->{$c->[COOKIE_DOMAIN]}//=scalar reverse $self->suffix(scalar reverse $c->[COOKIE_DOMAIN]);
+      $suffix=$_suffix_cache->{$c->[COOKIE_DOMAIN]}//=scalar reverse 
+        $_public_suffix_sub->(scalar reverse $c->[COOKIE_DOMAIN]);
+
       Log::OK::TRACE and log_trace "Looking up $c->[COOKIE_DOMAIN]=>$suffix";
       if($suffix){
         if($suffix eq $c->[COOKIE_DOMAIN]){
@@ -436,7 +415,7 @@ method set_cookies($request_uri, $flags, @cookies){
     if(!$c->[COOKIE_SECURE] and $scheme ne "https"){
       
       # get the second level domain to act as base to start search
-      $sld//=$_sld_cache{$c->[COOKIE_DOMAIN]}//=scalar reverse $self->second_level_domain(scalar reverse $c->[COOKIE_DOMAIN]);
+      $sld//=$_sld_cache{$c->[COOKIE_DOMAIN]}//=scalar reverse $_second_level_domain_sub->(scalar reverse $c->[COOKIE_DOMAIN]);
       next unless defined $sld;
 
       my $index=search_string_left $sld, \@_cookies;
@@ -662,8 +641,6 @@ method set_cookies($request_uri, $flags, @cookies){
   return $self;
 }
 
-*store_cookies=\&set_cookies;
-
 
 method _make_get_cookies{
  $_get_cookies_sub=sub ($request_uri, $flags=$_default_flags) {
@@ -678,8 +655,7 @@ method _make_get_cookies{
 
     # Look up the second level domain. This will be the root for our domain search
     #
-    #my $sld=scalar reverse $self->suffix($host);
-    my $sld=$_sld_cache{$host}//=scalar reverse $self->second_level_domain($host);
+    my $sld=$_sld_cache{$host}//=scalar reverse $_second_level_domain_sub->($host);
     my $rhost=scalar reverse $host;
 
 
@@ -798,7 +774,8 @@ method db {
 }
 
 
-method slurp_set_cookies($path) {
+method slurp_set_cookies{
+  my ($path)=@_; 
   open my $file, "<", $path 
     or die "Error opening file $path for reading";
 
@@ -807,7 +784,8 @@ method slurp_set_cookies($path) {
   }
 }
 
-method spurt_set_cookies($path){
+method spurt_set_cookies{
+  my ($path)=@_;
  open my $file, ">", $path 
   or die "Error opening file for writing";
 
@@ -854,7 +832,7 @@ method clear{
   $self;
 }
 method add {
-  $self->set_cookies(shift, $_default_flags, @_);
+  $self->store_cookies(shift, $_default_flags, @_);
 }
 
 method cookie_header {
@@ -869,7 +847,7 @@ method dump_cookies {
 
 method cookies_for{
   my $cookies=&$_get_cookies_sub;
-  map hash_set_cookie($_, 1), @$cookies;
+  map hash_set_cookie($_,1), @$cookies;
 }
 
 #TODO: add test for bulk adding of strings and structs
@@ -887,18 +865,18 @@ method load_cookies{
     # Build key for search
     $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOSTONLY]";
 
-    # Do binary search
-    #
-    $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
 
     # update the list
     unless(@_cookies){
       push @_cookies, $c;
     }
     else{
+      # Do binary search
+      #
+      $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
       # If the key is identical, then we prefer the latest cookie,
       # TODO: Fix key with scheme?
-      my $replace= ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])
+      my $replace= $index<@_cookies and ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])
       ? 1
       : 0;
 

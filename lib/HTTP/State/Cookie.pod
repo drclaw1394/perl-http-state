@@ -15,21 +15,10 @@ HTTP::State::Cookie - Cookie structure and functions
 
 =head1 DESCRIPTION
 
-Implements a structure representing a HTTP state fragment (cookie) and associated
-creation/encoding/decoding functions. This module can be used standalone or in
-conjunction with L<HTTP::State> for a fast and up to date client side 'cookie
-jar'.
-
-=head1 WHY NOT A CLASS?
-
-Client side cookies are subject to  many conditions and restrictions normally
-handled via 'cookie jar' state database. This does not implement any of these
-tests, and is used simple as a storage a for a 'row' in the database. 
-
-This encourages use of the Object Oriented interface on a cookie jar while
-keeping the overheads low for fast lookups.  For a couple of cookies this isn't
-a huge problem, but for many domain, path and name combinations, this can slow
-down client access considerably.
+Implements a structure representing a HTTP state fragment (cookie) and
+associated creation/encoding/decoding functions. This module can be used
+standalone or in conjunction with L<HTTP::State> for a fast and up to date
+client side 'cookie jar'.
 
 =head1 API
 
@@ -128,18 +117,38 @@ Returns a encoded http header value string.
 
 =head3 decode_set_cookie
 
-Decodes a HTTP Set-Cookie header value, into a cookie structure.
+  my  $cookie=decode_set_cookie $string $string;
+  my  $cookie=decode_set_cookie $string $string, $offset;
 
-Return a cookie structure.
+Decodes a HTTP Set-Cookie header value into a cookie structure and returns it.
+
+If the C<$offset> argument is defined, it is subtracted from the creation and
+last access time fields, if they are present.
+
+This performs the reverse of the C<$store_and_offset> argument in
+C<encode_set_cookie> to covert from local time to GMT times. This is used by
+L<HTTP::State> to load cookies in local time for storage compatible with
+L<HTTP::CookieJar>.
+
+
+
 
 =head2 HTTP Server Side
 
 =head3 encode_set_cookie
 
   my $string=encode_set_cookie $cookie;
+  my $string=encode_set_cookie $cookie, $store_and_offset;
 
 Encodes a cookie into the a string suitable as the value of HTTP Set-Cookie
 header.
+
+If the the C<$store_and_offset> argument is defined, internal fields for the
+cookie are also encoded. The value is also used as a time offset (in seconds)
+to add to the internal creation and last access times.
+
+This is used by L<HTTP::State> to dump cookies in local time for storage
+compatible with L<HTTP::CookieJar>.
 
 =head3 decode_cookies
 

@@ -10,7 +10,7 @@ use Log::OK;
 
 use Exporter "import";
 
-use feature qw"say signatures";
+use feature qw"say";# signatures";
 use Data::Dumper;
 use builtin qw<trim>;
 
@@ -266,8 +266,8 @@ sub decode_set_cookie{
 
   # adjust creation and last modified times
   if(defined $_[1]){
-    $values[COOKIE_CREATION_TIME]-=$_[1];
-    $values[COOKIE_LAST_ACCESS_TIME]-=$_[1];
+    $values[COOKIE_CREATION_TIME]-=$_[1] if $values[COOKIE_CREATION_TIME];
+    $values[COOKIE_LAST_ACCESS_TIME]-=$_[1] if $values[COOKIE_LAST_ACCESS_TIME];
 
   }
 
@@ -292,7 +292,8 @@ sub encode_cookies {
   join "; ", map "$_->[COOKIE_NAME]=".($_->[COOKIE_VALUE]//""), @_;
 }
 
-sub encode_set_cookie ($cookie, $store_flag=undef){
+sub encode_set_cookie {
+  my ($cookie, $store_flag)=@_;
 	Log::OK::DEBUG and log_debug "Serializing set cookie";	
 
   # Start with name and value
@@ -350,7 +351,8 @@ sub encode_set_cookie ($cookie, $store_flag=undef){
 }
 
 #mosty for compatibility with HTTP::CookieJar 'cookies_for' method
-sub hash_set_cookie($cookie, $store_flag=undef){
+sub hash_set_cookie{
+  my ($cookie, $store_flag)=@_;
 	my %hash=(name=>$cookie->[COOKIE_NAME], value=>$cookie->[COOKIE_VALUE]);
 
   # Reverse the cookie domain (stored backwards) if preset. Don't add the attribute

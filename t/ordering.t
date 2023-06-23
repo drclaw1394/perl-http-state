@@ -1,6 +1,5 @@
 use strict;
 use warnings;
-use Data::Dumper;
 use Log::ger::Output "Screen";
 use Log::OK {
   lvl=>"info",
@@ -33,7 +32,7 @@ my $cookie=cookie_struct(
   # DEFAULT DOMAIN
   #
   my $url="https://test.example.com.au";
-  $jar->clear->set_cookies($url,0xFF,  $cookie);
+  $jar->clear->store_cookies($url,0xFF,  $cookie);
   my ($encoded)=$jar->dump_cookies;
   
   # no domain set so use the url as default
@@ -52,7 +51,7 @@ my $cookie=cookie_struct(
     secure=>1
   );
   my $url="https://test.example.com.au/my/path/here/da.pdf";
-  $jar->clear->set_cookies($url,0xFF,  $cookie);
+  $jar->clear->store_cookies($url,0xFF,  $cookie);
 
   my ($encoded)=$jar->dump_cookies;
   ok  $encoded=~/Path=\/my\/path\/here/, "Default Path. Upto right most /";
@@ -69,7 +68,7 @@ my $cookie=cookie_struct(
   );
   
   $url="http://test.example.com.au/my/path/here/da.pdf";
-  $jar->set_cookies($url,0xFF,  $cookie);
+  $jar->store_cookies($url,0xFF,  $cookie);
 
   my @encoded=$jar->dump_cookies;
   ok @encoded ==0, "Attempt sub domain cookie set";
@@ -85,7 +84,7 @@ my $cookie=cookie_struct(
   );
   
   $url="http://test.example.com.au/my/path/here/da.pdf";
-  $jar->set_cookies($url,0xFF, $cookie);
+  $jar->store_cookies($url,0xFF, $cookie);
 
   my @encoded=$jar->dump_cookies;
   ok @encoded == 0, "Ignore Attempt public domain cookie set";
@@ -103,7 +102,7 @@ my $cookie=cookie_struct(
       domain=>"dd.$_.example.com",
       secure=>1
     );
-    $jar->set_cookies($url,0xFF,  $cookie);
+    $jar->store_cookies($url,0xFF,  $cookie);
   }
   $url="https://dd.dd.example.com/";
   $cookie=cookie_struct(
@@ -111,7 +110,7 @@ my $cookie=cookie_struct(
     domain=>"dd.dd.example.com",
     secure=>1
   );
-  $jar->set_cookies($url,0xFF,  $cookie);
+  $jar->store_cookies($url,0xFF,  $cookie);
   my @encoded=$jar->dump_cookies;
 
   say STDERR join "\n", @encoded;
@@ -129,7 +128,7 @@ my $cookie=cookie_struct(
     secure=>1
   );
 
-  $jar->set_cookies($url,0xFF,  $cookie) for 1..5;
+  $jar->store_cookies($url,0xFF,  $cookie) for 1..5;
   my @encoded=$jar->dump_cookies;
 
   ok @encoded==1, "Count ok";
@@ -147,12 +146,12 @@ my $cookie=cookie_struct(
     secure=>1
   );
 
-  $jar->set_cookies($url,0xFF,  $cookie);
+  $jar->store_cookies($url,0xFF,  $cookie);
   my $db=$jar->db;
   my $time=$db->[0][COOKIE_CREATION_TIME];
   sleep 1;
   
-  $jar->set_cookies($url,0xFF,  $cookie);
+  $jar->store_cookies($url,0xFF,  $cookie);
   ok @$db==1, "Count ok";
 
   my $new_time=$db->[0][COOKIE_CREATION_TIME];

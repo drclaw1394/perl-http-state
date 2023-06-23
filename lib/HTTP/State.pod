@@ -10,14 +10,13 @@ Importing and creating a Jar
 
   my $jar=HTTP::State->new;
 
-
 Add cookies from Set_Cookies header values:
 
   my $request_url="http://test.example.com";
   my $string1="name1=value; Max-Age=3600; Secure; SameSite=Lax";
   my $string2="name2=value; Max-Age=3600; Secure; SameSite=Lax";
 
-  $jar->set_cookies($request_url, $string1, $string2, ...);
+  $jar->store_cookies($request_url, $flags, $string1, $string2, ...);
 
   # or HTTP::CookieJar compatable API
   $jar->add($request_url, $string1);
@@ -27,7 +26,7 @@ Add cookies from Set_Cookies header values:
 Simple (compatible) lookup matching cookies and encode (for sending to server)
 
   my $request_url="http://test.example.com";
-  my $string=$jar->encode_request_cookies($request_url);
+  my $string=$jar->retrieve_cookies($request_url);
 
   # or HTTP::CookieJar compatable API but no Same-Site processing
   $jar->cookie_header($request_url);
@@ -40,7 +39,7 @@ Secure lookup and encode (RFC6265bis) from user agent parameters:
   my $request_url="http://test.example.com";
 
   #Using the bit field to specifiy the request context information
-  my $string=$jar->encode_request_cookies($request_url, FLAG_SAME_SITE | FLAG_TOP_LEVEL);
+  my $string=$jar->retrieve_cookies($request_url, FLAG_SAME_SITE | FLAG_TOP_LEVEL);
 
 Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
 
@@ -50,7 +49,7 @@ Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
   my $cs1=cookie_struct(name=>"value");
   my $cs2=cookie_struct(name=>"value");
 
-  $jar->set_cookies($request_url, $cs1, $cs2, ...);
+  $jar->store_cookies($request_url, $cs1, $cs2, ...);
 
 Lookup and return Key value pairs (client side)
 
@@ -214,11 +213,6 @@ Wrapper around the public suffix sub. Caches results for fast subsequent
 lookups. Looks up a public suffix for a given domain
 
 
-=head3 second_level_domain
-
-Like C<suffix> but returns suffix with the next level down. 
-Returns the highest domain which can be set by a (sub) domain, that isn't a top
-level domain/public suffix
 
 =head2 File IO
 
@@ -284,7 +278,7 @@ Retrieves any applicable cookies for the target C<$url>, and encodes into a
 Cookie header string value.
 
 B<Note on SAME SITE:> It is a compatibility wrapper around
-C<encode_request_cookies> utilising the default flags for the jar, as no flags
+C<retrieve_cookies> utilising the default flags for the jar, as no flags
 for same site support can be supplied directly.
 
 Please refer to the L<HTTP::CookieJar> for further information.
@@ -300,8 +294,8 @@ Returns a list of strings encoded as Set Cookie values, but with additional
 internal information.  The C<{persistent =E<gt> 1}> parameter forces only
 persistent cookies to be processed, ignoring session cookies.  
 
-Adjust the creation time and last access time into local timezone seconds
-before encoding, for compatibility.
+Adjusts the creation and last access times to be relative to epoch in the local
+time, instead of GMT for interoperability with L<HTTP::CookieJar>. 
 
 =head3 load_cookies
 
@@ -311,7 +305,7 @@ Takes a list of Set-Cookie type strings written out previous with
 C<dump_cookies> and injects them into the cookie jar.
 
 Decodes the creation time and last access time expected in local timezone
-seconds. These values are adjusted to GMT values for for injection.
+seconds. 
 
 Please refer to the L<HTTP::CookieJar> for further information.
 
@@ -346,14 +340,14 @@ substring comparison to domains.
 Sorting and searching of the cookies is done firstly by 'second level domain'
 of a request url using binary search provided by L<List::Insertion>
 
-=item Internal 'capture'
+=item Preresolved subroutine references
 
-The main retrieval subroutine is actually a anonymous sub instead of an other
-method, for better argument reuse and no unneeded dynamic lookup.
+The main retrieval subroutine is an anonymous sub instead of a method, for
+better argument reuse and no unneeded dynamic lookup.
 
 =back
 
-Cookie retrieval (100 random cookies added, 62 in jar):
+Cookie retrieval (100 random cookies added):
 
                    Rate http_cookiejar     http_state  protocol_http
   http_cookiejar 58.0/s             --           -96%           -97%
