@@ -137,19 +137,92 @@ considered "unsafe".
 When this flag is set, request is considered "top level". When unset, request
 is considered "not-top-level".
 
+=head2 Createing a cookie jar
+
+=head3 new
+
+  my $jar=HTTP::State->new(...);
+
+Creates a new cookie jar object. Optional named arguments can be provided:
+
+=over
+
+=item default_flags
+
+  my $jar=HTTP::State->new(default_flags=>flags);
+
+Sets the default flags used for storing and retrieving cookies, when no defined
+value is provided via C<retrieve_cookies> and C<store_cookies>
+
+Is also the value used in the compatibility API
+
+Default is all flags on
+(FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|FLAG_SAME_SITE|FLAG_SAFE_METH).
+
+
+=item retrieve_sort
+
+  my $jar=HTTP::State->new(retrieve_sort=>1||0);
+
+A boolean enabling sorting of retrieved cookies by path length and creation
+time.
+
+Default is false (no sorting).
+
+=item max_expiry
+
+  my $jar=HTTP::State->new(max_expiry=>seconds);
+
+The upper limit in duration a cookie can be valid for.  Value is in seconds.
+
+Default is 400 days (400 * 24* 3600)
+
+=item lax_allowing_unsafe
+
+  my $jar=HTTP::State->new(lax_allowing_unsafe=>1||0)
+
+A boolean enabling retrieval of cookies for unsafe methods  and default same
+site, as long as cookie is no older than C<lax_allow_unsafe_timeout>
+
+The default value is false.
+
+
+=item lax_allowing_unsafe_timeout
+
+  my $jar=HTTP::State->new(lax_allowing_unsafe_timeout=>seconds)
+
+The timeout value (age) to use when testing the C<lax_allow_unsafe_timeout>.
+
+The default value is 120 seconds
+
+
+=item public_suffix_sub
+
+  my $jar=HTTP::State->new(public_suffix_sub=>sub {...});
+
+A code reference which performs public suffix lookup on a URI.  The code ref
+must take a domain name as an argument and return a suffix or empty string
+string if no suffix exists.
+
+If this option is not provided, a reference to  the C<public_suffix> routine
+from L<Mozilla::PublicSuffix> is used.
+
+=back
+
 
 =head2 Storing and Retrieving
 
-For new code these methods are preferred.
+For new code, these methods are preferred over the compatibility API, to make
+better use of 'browsing context'.
 
 
 =head3 store_cookies
 
   $jar->store_cookies($request_uri, $flags, $string_or_struct, ...);
 
-Takes a C<$request_url> and one or more Set-Cookie header string values B<or>
-cookie_struct and inserts them into the cookie storage jar as per the 'storage
-model' of RFC6265bis.
+Takes a C<$request_url> , browsing context C<$flags> and one or more Set-Cookie
+header string values B<or> cookie_structs. Stores them in the cookie jar as per
+the 'storage model' of RFC6265bis.
 
 The exact processing of the cookies is subject to the C<$flags> bit field,
 which is a combination of the 'context flags'. If set to C<undef> the current
@@ -194,28 +267,6 @@ string.
 
 Takes the same arguments as C<retrieve_cookies> and matches the same cookies.
 Returns a list of key value pairs, of names and values.
-
-=head3 suffix
-
-Wrapper around the public suffix sub. Caches results for fast subsequent
-lookups. Looks up a public suffix for a given domain
-
-
-
-=head2 File IO
-
-=head3 slurp_set_cookies
-
-Reads in previously spurted cookie strings from a file.  Tests incoming
-cookies for expiry or parsing errors.  Does not process as normal set_cookie
-
-Cookies are processed and sorted as they are read in to reduce memory requirements.
-
-
-=head3 spurt_set_cookies
-
-Writes out the contents of the database as set cookie strings, with additional
-internal fields included.  Ignores any expired or session cookies
 
 
 
@@ -297,9 +348,8 @@ seconds.
 
 Please refer to the L<HTTP::CookieJar> for further information.
 
-=head3 PERFORMANCE
 
-=head2 Algorithm
+=head1 Algorithm
 
 Some specific design tricks are used to improve the storage and retrieval
 process compared to other cookie jars.
@@ -334,6 +384,8 @@ The main retrieval subroutine is an anonymous sub instead of a method, for
 better argument reuse and no unneeded dynamic lookup.
 
 =back
+
+=head1 PERFORMANCE
 
 Cookie retrieval (100 random cookies added):
 

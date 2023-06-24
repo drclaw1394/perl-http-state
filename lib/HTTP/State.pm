@@ -49,14 +49,14 @@ class HTTP::State;
 
 field $_get_cookies_sub :reader;  # Main cookie retrieval routine, reference.
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
-field $_suffix_cache :param=undef; #Hash ref used as cache
+field $_suffix_cache;# :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
 field $_second_level_domain_sub;
 #field $_default_same_site :param="None";
 
 field $_lax_allowing_unsafe :param=undef;
 field $_lax_allowing_unsafe_timeout :param=120;
-field $_post_sort :param=undef;
+field $_retrieve_sort :param=undef;
 
 field $_max_expiry :param=400*24*3600; 
 
@@ -784,7 +784,7 @@ method _make_get_cookies{
         );
         $f&&=(($flags & FLAG_SAFE_METH) or (
           $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
-          and $time-$_->[COOKIE_CREATION_TIME] < $_lax_allowing_unsafe_timeout 
+          and ($time-$_->[COOKIE_CREATION_TIME]) < $_lax_allowing_unsafe_timeout 
         ));
 
         $f&&=($flags & FLAG_TOP_LEVEL);
@@ -812,7 +812,7 @@ method _make_get_cookies{
     #        earlier creation-times are listed before cookies with later
     #        creation-times.
 
-    if($_post_sort){
+    if($_retrieve_sort ){
       @output= sort {
             length($b->[COOKIE_PATH]) <=> length($a->[COOKIE_PATH])
               || $a->[COOKIE_CREATION_TIME] <=> $b->[COOKIE_CREATION_TIME]
@@ -847,34 +847,6 @@ method db {
 }
 
 
-method slurp_set_cookies{
-  my ($path)=@_; 
-  open my $file, "<", $path 
-    or die "Error opening file $path for reading";
-
-  while(<$file>){
-    $self->load_cookies($_);
-  }
-}
-
-method spurt_set_cookies{
-  my ($path)=@_;
- open my $file, ">", $path 
-  or die "Error opening file for writing";
-
-  my $time=time-$tz_offset;
-  for(@_cookies){
-    # Ignore session cookies
-    #
-    next unless $_->[COOKIE_PERSISTENT];
-
-    # Don't save expired cookies
-    #
-    next if $_->[COOKIE_EXPIRES]<=$time;
-
-    print $file encode_set_cookie($_, 1)."\n";
-  }
-}
 
 
 

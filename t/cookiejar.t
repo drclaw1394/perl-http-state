@@ -61,9 +61,5 @@ $cookie->[COOKIE_VALUE]="NEW VALUE";
 
 my $header=$jar->retrieve_cookies($request_url);
 
-$jar->spurt_set_cookies("test.cookie.jar");
-
-my $jar2=HTTP::State->new;
-$jar2->slurp_set_cookies("test.cookie.jar");
 
 done_testing;
