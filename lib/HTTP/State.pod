@@ -4,61 +4,49 @@ HTTP::State - RFC6265bis-draft-12 Cookie jar for HTTP Clients
 
 =head1 SYNOPSIS
 
-Importing and creating a Jar
 
-  use HTTP::State;
+  use HTTP::State ":flags";
+   
+  # Create a jar
+  #
+  my $jar=HTTP::State->new(default_flags=>FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|...);
 
-  my $jar=HTTP::State->new;
-
-Add cookies from Set_Cookies header values:
-
-  my $request_url="http://test.example.com";
-  my $string1="name1=value; Max-Age=3600; Secure; SameSite=Lax";
-  my $string2="name2=value; Max-Age=3600; Secure; SameSite=Lax";
-
-  $jar->store_cookies($request_url, $flags, $string1, $string2, ...);
-
-  # or HTTP::CookieJar compatable API
-  $jar->add($request_url, $string1);
-  $jar->add($request_url, $string2);
-
-
-Simple (compatible) lookup matching cookies and encode (for sending to server)
-
-  my $request_url="http://test.example.com";
-  my $string=$jar->retrieve_cookies($request_url);
-
-  # or HTTP::CookieJar compatable API but no Same-Site processing
-  $jar->cookie_header($request_url);
-
-
-
-Secure lookup and encode (RFC6265bis) from user agent parameters:
-
-  use HTTP::State ":constants";
+  # Requested URL and browsing context / same site flags the user agent needs
+  # to manage
+  #
   my $request_url="http://test.example.com";
 
-  #Using the bit field to specifiy the request context information
-  my $string=$jar->retrieve_cookies($request_url, FLAG_SAME_SITE | FLAG_TOP_LEVEL);
 
-Adding cookies from a cookie structure (L<HTTP::State::Cookie>):
 
-  # Structures and function for cookies
-  use HTTP::State::Cookie;
-  my $request_url="http://test.example.com";
-  my $cs1=cookie_struct(name=>"value");
-  my $cs2=cookie_struct(name=>"value");
+  # Retrieve encoded cookies name/values applicable for the request
+  #
+  my $flags=FLAGS_TYPE_HTTP|FLAGS_TOP_LEVEL|...;
+  my $cookie_header = $jar->retrieve_cookies($request_url, $flags);
+  
+  #       OR 
 
-  $jar->store_cookies($request_url, $cs1, $cs2, ...);
+  # use the  HTTP::CookieJar compatible API, using the default flags for the
+  #
+  my $cookie_header = $jar->cookie_header($request_url);
 
-Lookup and return Key value pairs (client side)
 
-  my @kv=$jar->get_kv_cookies($url, $referer, $action);
 
-Lookup and return copies of cookie structures 
 
-  my @cookie_structs=$jar->get_cookies($url, $referer, $action);
+  # Do a request...
+  #
+  my $response=user_agent->get(cookie_header=>$cookie_header);
 
+
+
+
+  # Store the  Set-Cookies in the jar for the request url w
+  #
+  $jar->store_cookies($request_url, $flags, $response->header->{Set_Cookie});
+
+  #     OR
+
+  # use the HTTP::CookieJar compatible API, using the default flags
+  $jar->add($request_url, $response->header->{Set_Cookie});
 
 
 =head1 DESCRIPTION
@@ -66,7 +54,7 @@ Lookup and return copies of cookie structures
 
 An up to date cookie processing module, implementing a RFC6265-bis-draft based
 "cookie jar" for HTTP user agents.  At the time of writing the current draft is
-'12'. As it progresses this module will be updated accordingly.
+'12'. As the RFC progresses this module will be updated accordingly.
 
 A summary of cookie handling benefits from RFC6265bis include: 
 
@@ -89,7 +77,7 @@ A summary of cookie handling benefits from RFC6265bis include:
 =back
 
 Default importing of the module does not import any symbols. If you intend to
-use the extended RFC6265bis features directly, please import with ":constants"
+use the extended RFC6265bis features directly, please import with ":flags"
 parameter for bit field masks.
 
 For explicit encoding and decoding of cookie strings (not via a cookie jar),

@@ -5,7 +5,7 @@ use Log::OK {
     opt=>"verbose"
   };
 use HTTP::State::Cookie qw<:encode :decode>;
-use HTTP::State ":constants";
+use HTTP::State ":flags";
 #use Cookie;
 use HTTP::CookieJar;
 use Protocol::HTTP::CookieJar;
@@ -94,7 +94,7 @@ cmpthese 1, {
     for(@sample){
       #say $urls[$_];
       #say $cookies[$_];
-      $http_state_jar->set_cookies($urls[$_], 0xFF, $cookies[$_]);
+      $http_state_jar->store_cookies($urls[$_], 0xFF, $cookies[$_]);
       #say Dumper $http_state_jar->db;
     }
   },
@@ -144,7 +144,7 @@ cmpthese -1, {
   http_state=>sub { 
     for(@samples){
       #say $urls[$_];
-      my $string=$http_state_jar->encode_request_cookies($urls[$_]);
+      my $string=$http_state_jar->retrieve_cookies($urls[$_]);
       #say "http_state: ".$string if $string;
       push $results[0]->@*, $string;
     }

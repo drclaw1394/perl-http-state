@@ -43,7 +43,7 @@ use Exporter "import";
 
 my @const=qw<FLAG_SAME_SITE FLAG_TYPE_HTTP FLAG_SAFE_METH FLAG_TOP_LEVEL>;
 our @EXPORT_OK=@const;
-our %EXPORT_TAGS=("constants"=>\@const);
+our %EXPORT_TAGS=("flags"=>\@const);
 
 class HTTP::State;
 
@@ -73,7 +73,7 @@ BUILD{
   }
   $_suffix_cache//={};
   $_second_level_domain_sub=sub {
-    my $domain=$_[0];#lc $_[0];
+    my $domain=$_[0];
     my $highest="";
     my $suffix=$_suffix_cache->{$domain}//=&$_public_suffix_sub;
 
@@ -133,16 +133,56 @@ method store_cookies{
   return $self unless @cookies;
   # Parse the request_uri
   #
-  my ($scheme, $authority, $path, $query, $fragment) =
-  $request_uri =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+  #
+ 
+    my $index;
+    my $host;
+    my $path;
+    my $authority;
+    my $scheme;
 
-  Log::OK::TRACE and log_trace __PACKAGE__. " authority: ". $authority;
+    $index=index $request_uri, "://";
+    $scheme=substr $request_uri, 0, $index, "";
+    substr($request_uri,0, 3)="";
+   
+    $index=index $request_uri, "/", $index;
+    if($index>0){
+      #have path
+      $authority=substr $request_uri, 0, $index, "";
+      $path=$request_uri;
+    }
+    else {
+      #no path
+      $authority=$request_uri;
+      $path="";
+    }
 
-  # Parse the authority into userinfo, host and port
-  my ($user, $password, $host, $port)=
-    $authority =~  m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
+    # Parse out authority if username/password is provided
+    $index=index($authority, "@");
+    $authority= $index>0 
+      ?substr $authority, $index+1
+      :$authority;
 
-  $port//=80;
+    # Find the host
+    $index=index $authority, ":";
+    $host=$index>0 
+      ?  substr $authority, 0, $index
+      : $authority;
+
+    die "URI format error" unless $scheme and $host;
+
+  ########################################################################################
+  # my ($scheme, $authority, $path, $query, $fragment) =                                 #
+  # $request_uri =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|; #
+  #                                                                                      #
+  # Log::OK::TRACE and log_trace __PACKAGE__. " authority: ". $authority;                #
+  #                                                                                      #
+  # # Parse the authority into userinfo, host and port                                   #
+  # my ($user, $password, $host, $port)=                                                 #
+  #   $authority =~  m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;            #
+  #                                                                                      #
+  # $port//=80;                                                                          #
+  ########################################################################################
 
   my $time=time-$tz_offset; #Cache time. Translate  to GMT
 
@@ -643,15 +683,48 @@ method store_cookies{
 
 
 method _make_get_cookies{
- $_get_cookies_sub=sub ($request_uri, $flags=$_default_flags) {
-    my ($scheme, $authority, $path, $query, $fragment) =
-    $request_uri =~ 
-      m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+ $_get_cookies_sub=sub {
+    my ($request_uri, $flags)=@_;
+    $flags//=$_default_flags;
 
-    my ($user, $password, $host, $port)=$authority =~  
-      m|(?:([^:]+)(?::([^@]+))@){0,1}([^:]+)(?::(\d+)){0,1}|x;
+    my $index;
+    my $host;
+    my $path;
+    my $authority;
+    my $scheme;
 
-    $port//=80;
+    $index=index $request_uri, "://";
+    $scheme=substr $request_uri, 0, $index, "";
+    substr($request_uri,0, 3)="";
+   
+    $index=index $request_uri, "/", $index;
+    if($index>0){
+      #have path
+      $authority=substr $request_uri, 0, $index, "";
+      $path=$request_uri;
+    }
+    else {
+      #no path
+      $authority=$request_uri;
+      $path="";
+    }
+
+    # Parse out authority if username/password is provided
+    $index=index($authority, "@");
+    $authority= $index>0 
+      ?substr $authority, $index+1
+      :$authority;
+
+    # Find the host
+    $index=index $authority, ":";
+    $host=$index>0 
+      ?  substr $authority, 0, $index
+      : $authority;
+
+    die "URI format error" unless $scheme and $host;
+
+
+    #:($host, undef)=split ":", $authority, 2;
 
     # Look up the second level domain. This will be the root for our domain search
     #
@@ -664,7 +737,7 @@ method _make_get_cookies{
     my $time=time-$tz_offset;
     my @output;
 
-    my $index=search_string_left $sld, \@_cookies;
+    $index=search_string_left $sld, \@_cookies;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
     Log::OK::TRACE and log_trace  "looking for host: $sld";
@@ -757,11 +830,11 @@ method get_cookies{
 
 
 #TODO rename to retrieve_cookies?
-method encode_request_cookies{
+method retrieve_cookies{
   my $cookies=&$_get_cookies_sub;
   join "; ", map  "$_->[COOKIE_NAME]=$_->[COOKIE_VALUE]", @$cookies;
 }
-*retrieve_cookies=\&encode_request_cookies;
+#*retrieve_cookies=\&encode_request_cookies;
 
 method get_kv_cookies{#
   my $cookies=&$_get_cookies_sub;
