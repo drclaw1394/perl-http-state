@@ -52,11 +52,11 @@ HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
 =head1 DESCRIPTION
 
 
-An up to date cookie processing module, implementing a RFC6265-bis-draft based
+An up to date cookie processing module, implementing a RFC6265bis-draft based
 "cookie jar" for HTTP user agents.  At the time of writing the current draft is
 '12'. As the RFC progresses this module will be updated accordingly.
 
-A summary of cookie handling benefits from RFC6265bis include: 
+A summary of cookie handling benefits from RFC6265bis-draft include: 
 
 =over
 
@@ -77,8 +77,8 @@ A summary of cookie handling benefits from RFC6265bis include:
 =back
 
 Default importing of the module does not import any symbols. If you intend to
-use the extended RFC6265bis features directly, please import with ":flags"
-parameter for bit field masks.
+use the extended RFC6265bis-draft features directly, please import with
+":flags" parameter for bit field masks.
 
 For explicit encoding and decoding of cookie strings (not via a cookie jar),
 please see the companion L<HTTP::State::Cookie> module. This is used internally
@@ -90,10 +90,10 @@ It is necessary the user agent performs additional book keeping and testing
 of what is a 'same site' request, top level navigation, reloading, document etc
 to fully utilise the additional functionality available in this module.
 
-While these tests/conditions are specified in RFC6265bis, it is not in the
-scope of this module and needs to be implemented in a user-agent.  The results
-of such tests are represented as bit fields, which are used to guide the
-store/retrieve algorithm accordingly within this module.
+While these tests/conditions are specified in RFC6265bis-draft, it is not in
+the scope of this module and needs to be implemented in a user-agent.  The
+results of such tests are represented as bit fields, which are used to guide
+the store/retrieve algorithm accordingly within this module.
 
 
 =head1 COMPATIBILITY
@@ -222,7 +222,7 @@ better use of 'browsing context'.
 
 Takes a C<$request_url> , browsing context C<$flags> and one or more Set-Cookie
 header string values B<or> cookie_structs. Stores them in the cookie jar as per
-the 'storage model' of RFC6265bis.
+the 'storage model' of RFC6265bis-draft.
 
 The exact processing of the cookies is subject to the C<$flags> bit field,
 which is a combination of the 'context flags'. If set to C<undef> the current
@@ -236,7 +236,7 @@ response.
   $jar->retrieve_cookies($request_url, $flags); 
 
 Retrieves cookies from a jar, for the specified C<$request_url> according to
-RFC6265bis 'cookie retrieval'. The cookies are encodes them into a string
+RFC6265bis-draft 'cookie retrieval'. The cookies are encodes them into a string
 suitable for use in a Cookie header in a HTTP request.
 
 The exact processing of the cookies is subject to the C<$flags> bit field,
@@ -283,7 +283,7 @@ L<HTTP::CookieJar> is used.
     $jar->add($url, $set_cookie_string);
 
 Adds a cookie (as a Set_Cookie value string C<$set_cookie_string>) to the
-cookie jar for the request url C<$url>. 
+cookie jar for the request URL C<$url>. 
 
 B<Note on SAME SITE:> It is a compatibility wrapper around C<store_cookies>
 utilising the default flags for the jar as no flags for same site support can
@@ -305,7 +305,7 @@ Removes all cookies from the jar
 
 Returns a list of hash refs representing a set cookie for a target C<$url>. The
 elements of each hash are named as per L<HTTP::CookieJar>. Additional elements
-could also exist (ie samesite)
+could also exist (IE samesite)
 
 Please refer to the L<HTTP::CookieJar> for further information.
 
@@ -359,7 +359,8 @@ process compared to other cookie jars.
 =item Keyed
 
 Cookies are uniquely identified by the domain, path, name and  host only flag
-(as per RFC6265bis). These are combined into a key, which make it easy to sort
+(as per RFC6265bis-draft). These are combined into a key, which make it easy to
+sort
 
 =item Reversed Domain Names
 
@@ -376,7 +377,7 @@ substring comparison to domains.
 =item Binary Search
 
 Sorting and searching of the cookies is done firstly by 'second level domain'
-of a request url using binary search provided by L<List::Insertion>
+of a request URL using binary search provided by L<List::Insertion>
 
 =item Preresolved subroutine references
 
@@ -401,12 +402,13 @@ Encode jar to other formats
 =head1 COMPARISON TO OTHER MODULES
 
 L<Protocol::HTTP::CookieJar> is a very fast cookie jar module, also
-implementing RFC6265bis, though it requires a large number of XS modules to get
-going.
+implementing RFC6265bis-draft, though it requires a large number of XS modules
+to get going.
 
 L<HTTP::CookieJar> is the cookie jar suggested in the L<LWP> documentation.
 While it has public suffix support, it doesn't provide the additional
-conditions of RFC6265bis. It is also quite slow in comparison to this module.
+conditions of RFC6265bis-draft. It is also quite slow in comparison to this
+module.
 
 =head1 AUTHOR
 

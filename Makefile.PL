@@ -1,8 +1,8 @@
-use 5.036000;
 use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'HTTP::State',
     VERSION_FROM      => 'lib/HTTP/State.pm', 
+    MIN_PERL_VERSION  => "5.36.0",
     PREREQ_PM         => {
       "Log::ger"=>0,
       "Log::OK"=>0,
@@ -28,5 +28,4 @@ WriteMakefile(
         }
       }
     }
-
 );

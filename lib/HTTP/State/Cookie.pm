@@ -155,10 +155,10 @@ sub cookie_struct {
 # Supports a simple scalar or an array ref of simple scalars to parse/decode
 sub decode_cookies {
   no warnings "experimental";
-  my @values= map trim($_),            #trim leading /trailing white space 
-              map split("=", $_, 2),  #Split files into  KV pairs
+  my @values= map trim($_),           #trim leading /trailing white space 
+              map split("=", $_, 2),  #Split fields into  KV pairs
               split /;\s*/, ref($_[0])
-                ?join("; ", $_[0]->@*)
+                ? join("; ", $_[0]->@*)
                 : $_[0];    #Split input into fields
 	@values;
 }
@@ -166,7 +166,6 @@ sub decode_cookies {
 # Returns a newly created cookie struct from a Set-Cookie string. Does not
 # validate or create default values of attributess. Only processes what is
 # given
-# Parsing is done according with RFC6265bis no RFC6265
 #
 sub decode_set_cookie{
   no warnings "experimental";
