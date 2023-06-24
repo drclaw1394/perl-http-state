@@ -11,7 +11,6 @@ use Log::OK;
 use Exporter "import";
 
 use feature qw"say";# signatures";
-use Data::Dumper;
 use builtin qw<trim>;
 
 
@@ -136,10 +135,12 @@ sub cookie_struct {
       }
     }
 
-    say "EXPIRED IS SET" if defined $c[COOKIE_EXPIRES];
 
     $c[COOKIE_EXPIRES]-=$tz_offset if defined $c[COOKIE_EXPIRES];
-    $c[COOKIE_DOMAIN]=scalar reverse $c[COOKIE_DOMAIN] if $c[COOKIE_DOMAIN];
+    $c[COOKIE_DOMAIN]=scalar reverse lc $c[COOKIE_DOMAIN] if $c[COOKIE_DOMAIN];
+
+    $c[COOKIE_SAMESITE]=$same_site_reverse{lc$c[COOKIE_SAMESITE]};
+    $c[COOKIE_HOSTONLY]//=0;
 
   }
 
@@ -284,6 +285,9 @@ sub decode_set_cookie{
   for($values[COOKIE_SAMESITE]//()){
     $_=$same_site_reverse{lc $_};
   }
+
+  $values[COOKIE_HOSTONLY]//=0;
+
   \@values;
 }
 

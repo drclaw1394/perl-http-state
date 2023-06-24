@@ -14,15 +14,14 @@ use HTTP::State ":flags";
 use HTTP::State::Cookie ":all";
 
 use HTTP::CookieJar;
-#say Dumper my $test=cookie_struct(name=>"value", "Expires"=>(time));
-#say Dumper encode_set_cookie $test;
 
-
-say time;
 
 my @strings=(
-  #encode_set_cookie cookie_struct(name=>"value", "Max-Age"=>1),
-  encode_set_cookie cookie_struct(name=>"value", "Expires"=>(time+1))
+  encode_set_cookie(cookie_struct(name2=>"value2", "Expires"=>(time+10))),
+  encode_set_cookie(cookie_struct(name=>"value", "Expires"=>(time+1))),
+  encode_set_cookie(cookie_struct(name3=>"value3", "Max-Age"=>13, "SameSite"=>"Lax")),
+  encode_set_cookie(cookie_struct(name4=>"value4", "Domain"=>"wrong.com", "Max-Age"=>13, "SameSite"=>"Lax")),
+  encode_set_cookie(cookie_struct(name5=>"value5", "Domain"=>"my.site.com.au", "Max-Age"=>13, "SameSite"=>"Strict"))
 );
 
 my $state_jar=HTTP::State->new();
@@ -30,18 +29,39 @@ my $cookie_jar=HTTP::CookieJar->new();
 
 my $url='http://my.site.com.au/path/to/file.pdf';
 for (@strings){
-  say "ADDiNG STRING: $_";
   $state_jar->add($url, $_);
   $cookie_jar->add($url, $_);
 }
 
-use Data::Dumper;
-say STDERR "HTTP::State";
-say STDERR Dumper $state_jar->dump_cookies;#({persistent=>0});
+my @hs=sort $state_jar->dump_cookies;
 
-say STDERR "HTTP::CookieJar";
-say STDERR Dumper $cookie_jar->dump_cookies;#({persistent=>0});
+my @hc=sort $cookie_jar->dump_cookies;
 
-ok 1;
-say STDERR "";
+ok @hs==@hc, "Correct count";
+
+
+for(0..$#hs){
+  ok 0==index($hs[$_], $hc[$_]), "Cookie match";
+}
+
+
+say "";
+my $state_jar2=HTTP::State->new();
+my $cookie_jar2=HTTP::CookieJar->new();
+
+$state_jar2->load_cookies(@hc);
+$cookie_jar2->load_cookies(@hs);
+
+@hs=sort $state_jar2->dump_cookies;
+
+@hc=sort $cookie_jar2->dump_cookies;
+
+ok @hs==@hc, "Correct count";
+
+for(0..$#hc){
+  ok 0==index($hs[$_], $hc[$_]), "Cookie match";
+}
+
+
+
 done_testing;

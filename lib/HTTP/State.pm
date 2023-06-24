@@ -372,6 +372,7 @@ method store_cookies{
       $c->[COOKIE_HOSTONLY]=1;
       $c->[COOKIE_DOMAIN]=$rhost;
     }
+
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 10 OK";
 
     #11.
@@ -643,7 +644,7 @@ method store_cookies{
     my $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
 
     #Test if actually found or just insertion point
-    my $found=$index<@_cookies  && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]);
+    my $found=($index<@_cookies  && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
 
     if($found){
         #reject if api call http only cookie currently exists
@@ -902,7 +903,6 @@ method load_cookies{
   my $c;
   for my $s (@_){
     next unless $c=decode_set_cookie($s, $tz_offset);
-
     # Don't load if cookie is expired
     #
     next if $c->[COOKIE_EXPIRES]<=$time;
@@ -921,9 +921,10 @@ method load_cookies{
       $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
       # If the key is identical, then we prefer the latest cookie,
       # TODO: Fix key with scheme?
-      my $replace= $index<@_cookies and ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])
+      my $replace= ($index<@_cookies and ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]))
       ? 1
       : 0;
+
 
       splice @_cookies, $index, $replace, $c;
     }

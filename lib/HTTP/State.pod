@@ -1,31 +1,31 @@
 =head1 NAME
 
-HTTP::State - RFC6265bis-draft-12 Cookie jar for HTTP Clients
+HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
 
 =head1 SYNOPSIS
 
 
   use HTTP::State ":flags";
    
-  # Create a jar
+  # Create a jar. Default flags for compatibility API.
   #
   my $jar=HTTP::State->new(default_flags=>FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|...);
 
-  # Requested URL and browsing context / same site flags the user agent needs
-  # to manage
+  # Requested URL
   #
   my $request_url="http://test.example.com";
 
 
 
-  # Retrieve encoded cookies name/values applicable for the request
+  # Retrieve encoded cookies name/values applicable for the request. User agent
+  # indicates the context of the request using flags.
   #
   my $flags=FLAGS_TYPE_HTTP|FLAGS_TOP_LEVEL|...;
   my $cookie_header = $jar->retrieve_cookies($request_url, $flags);
   
   #       OR 
 
-  # use the  HTTP::CookieJar compatible API, using the default flags for the
+  # use the  HTTP::CookieJar compatible API, jar's default flags
   #
   my $cookie_header = $jar->cookie_header($request_url);
 
