@@ -1,11 +1,15 @@
 use strict;
 use warnings;
 use feature ":all";
-use Log::ger::Output "Screen";
-use Log::OK {
-  lvl=>"info",
-  opt=>"verbose"
-};
+
+##################################
+# use Log::ger::Output "Screen"; #
+# use Log::OK {                  #
+#   lvl=>"info",                 #
+#   opt=>"verbose"               #
+# };                             #
+##################################
+
 use Test::More;
 use HTTP::State;
 use HTTP::State::Cookie ":all";

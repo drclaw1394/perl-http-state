@@ -1,12 +1,14 @@
 use strict;
 use warnings;
 use feature ":all";
-use Data::Dumper;
-use Log::ger::Output "Screen";
-use Log::OK {
-  lvl=>"info",
-  opt=>"verbose"
-};
+##################################
+# use Data::Dumper;              #
+# use Log::ger::Output "Screen"; #
+# use Log::OK {                  #
+#   lvl=>"info",                 #
+#   opt=>"verbose"               #
+# };                             #
+##################################
 use Test::More;
 use HTTP::State;
 use HTTP::State::Cookie ":all";
@@ -26,7 +28,7 @@ use HTTP::State::Cookie ":all";
   $jar->store_cookies($url, 0xFF, $string);
   my @dump=$jar->dump_cookies;
 
-  say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
+  #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
   ok @dump == 1, "Cookie added";
 
   #Test  default values
@@ -61,8 +63,8 @@ use HTTP::State::Cookie ":all";
   $jar->store_cookies($url, 0xFF, $string);
   my @dump=$jar->dump_cookies;
 
-  say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
-  say STDERR Dumper @dump;
+  #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
+  #say STDERR Dumper @dump;
   ok @dump == 0, "Cookie attempt to set wrong domain";
 
 }
@@ -79,8 +81,8 @@ use HTTP::State::Cookie ":all";
   $jar->store_cookies($url,0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
-  say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
-  say STDERR Dumper @dump;
+  #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
+  #say STDERR Dumper @dump;
   ok @dump == 0, "Cookie attempt set secure on insecure channel";
 }
 {
@@ -95,8 +97,8 @@ use HTTP::State::Cookie ":all";
   $jar->store_cookies($url,0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
-  say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
-  say STDERR Dumper @dump;
+  #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
+  #say STDERR Dumper @dump;
   ok @dump == 0, "Same site of none attempted on non secure cookie ";
 }
 
@@ -141,7 +143,7 @@ use HTTP::State::Cookie ":all";
 
   ok @dump == 1,  "Cookie updated";
   ok $dump[0]=~ /name=new_value/, "Value updated";
-  say STDERR Dumper @dump;
+  #say STDERR Dumper @dump;
 }
 
 

@@ -1,13 +1,15 @@
 use strict;
 use warnings;
 use feature ":all";
-use Log::ger::Output "Screen";
-use Log::OK {
-    opt=>"verbose",
-    lvl=>"info"
-  };
-
-use Data::Dumper;
+##################################
+# use Log::ger::Output "Screen"; #
+# use Log::OK {                  #
+#     opt=>"verbose",            #
+#     lvl=>"info"                #
+#   };                           #
+#                                #
+# use Data::Dumper;              #
+##################################
 
 use Test::More;
 use HTTP::State ":flags";

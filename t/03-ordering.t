@@ -1,10 +1,13 @@
 use strict;
 use warnings;
-use Log::ger::Output "Screen";
-use Log::OK {
-  lvl=>"info",
-  opt=>"verbose"
-};
+
+##################################
+# use Log::ger::Output "Screen"; #
+# use Log::OK {                  #
+#   lvl=>"info",                 #
+#   opt=>"verbose"               #
+# };                             #
+##################################
 
 use Test::More;
 use HTTP::State::Cookie qw":constants :encode :decode cookie_struct";
@@ -113,7 +116,6 @@ my $cookie=cookie_struct(
   $jar->store_cookies($url,0xFF,  $cookie);
   my @encoded=$jar->dump_cookies;
 
-  say STDERR join "\n", @encoded;
   ok @encoded==6, "Count ok";
 }
 
