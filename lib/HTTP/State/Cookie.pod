@@ -87,6 +87,7 @@ allows for compile time attribute name checking and performance improvements:
 		COOKIE_SECURE
 		COOKIE_HTTPONLY
 		COOKIE_SAMESITE
+    COOKIE_PARTITIONED
 
 Any other integer value is ignored.
 

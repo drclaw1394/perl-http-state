@@ -1,6 +1,6 @@
 =head1 NAME
 
-HTTP::State - RFC6265bis-draft and CHIPS Cookie Jar for HTTP Clients
+HTTP::State - Fast RFC6265bis-draft + CHIPS Cookie Jar
 
 =head1 SYNOPSIS
 
@@ -52,23 +52,62 @@ HTTP::State - RFC6265bis-draft and CHIPS Cookie Jar for HTTP Clients
 
 =head1 DESCRIPTION
 
+Web browsers are constantly improving privacy and limiting the traceability of
+cookies. This modules is a cookie jar providing the same up to date thinking to
+Perl user-agents. 
 
-An up to date cookie processing module, implementing a RFC6265bis-draft "cookie
-jar" with additional CHIPS (Partitioning) support.  At the time of writing the
-current draft is '12'. As the RFC progresses this module will be updated
-accordingly.
+The algorithm implemented is derived from RFC6265bis-draft and Cookies Having
+Independent Partitioned State (CHIPS). As these are not finalised standards, it
+is to be expected this module may change behaviour to keep up to date.
 
-A summary of cookie handling benefits from RFC6265bis-draft include: 
+To aid adoption, a L<HTTP::CookieJar> compatible API is implemented using
+default values (specific to each jar instance) where needed.
+
+Long term, existing user agents would need to be modified to take full
+advantage of this module. Not only are there differences in the API compared to
+popular cookie jars, but conceptually the notion of 'browsing context' needs to
+be implemented.
+
+For explicit encoding and decoding of cookie strings (not via a cookie jar),
+please see the companion L<HTTP::State::Cookie> module. This is used internally
+for encoding and decoding cookies.
+
+=head2 Summary of RFC6265bis and CHIPS
+
+At the time of writing RFC6265vis at draft '12'. As the RFC progresses this
+module will be updated accordingly. 
 
 =over
 
 =item Public suffix checking
 
+Cookies are tested for public suffixes  (ie .com, .org, .com.au) and rejected
+if the cookie domain is not below such a level. This prevents a trackers and
+information leakage at a basic level.
+
 =item Prefix cookie name processing
+
+Cookies names prefixed with __Host- and __Secure- are subject to addition
+requirements before being stored.
 
 =item Restricted upper limit of expiry dates
 
-=item same site status
+Cookies are restricted expire 400 days in the future, instead 
+
+=item Browsing Context
+
+It is necessary the user agent performs additional book keeping and testing
+of what is a 'same site' request, top level navigation, reloading, document etc
+to fully utilise the additional functionality available in this module.
+
+While these tests/conditions are specified in RFC6265bis-draft, it is not in
+the scope of this module and needs to be implemented in a user-agent.  The
+results of such tests are represented as bit fields, which are used to guide
+the store/retrieve algorithm accordingly within this module:
+
+=over
+
+=item samesite
 
 =item API or HTTP
 
@@ -78,33 +117,17 @@ A summary of cookie handling benefits from RFC6265bis-draft include:
 
 =back
 
-Default importing of the module does not import any symbols. If you intend to
-use the extended RFC6265bis-draft features directly, please import with
-":flags" parameter for bit field masks.
 
-For explicit encoding and decoding of cookie strings (not via a cookie jar),
-please see the companion L<HTTP::State::Cookie> module. This is used internally
-for encoding and decoding cookies.
+=item Partitioning (CHIPS)
 
-=head1 SAMESITE and CONTEXT
+Cookies Having Independent Partitioned State (CHIPS), effectively gives each
+first party site it's own cookie jar. Third party cookies set from resources
+requested by the first party site are stored in this 'partitioned cookie jar'.
 
-It is necessary the user agent performs additional book keeping and testing
-of what is a 'same site' request, top level navigation, reloading, document etc
-to fully utilise the additional functionality available in this module.
+These cannot be used by another first party site, requesting resources from the
+same third party site. 
 
-
-While these tests/conditions are specified in RFC6265bis-draft, it is not in
-the scope of this module and needs to be implemented in a user-agent.  The
-results of such tests are represented as bit fields, which are used to guide
-the store/retrieve algorithm accordingly within this module.
-
-=head1 PARTITIONING
-
-Cookies Having Independent Partitioned State
-Partitioning of cookies is also supported but must be enabled when a cookie jar
-is created.  User agent must provided the scheme and host of the first party
-site as the partition key.
-
+=back
 
 =head1 COMPATIBILITY
 
@@ -115,37 +138,57 @@ This in theory should allow user-agents like L<HTTP::Tiny> and L<Furl> for
 example to benefit from performance and security improvements with limited
 changes to existing code.
 
-To work around the lack of same site / browsing context support in the
-L<HTTP::CookieJar> API, the compatibility API utilises the current values of
-the 'default flags' for the cookie jar. 
-
-
+To work around the lack of same site / browsing context / partitioning support
+in the L<HTTP::CookieJar> API, the compatibility API utilises the current
+values of the 'default flags' for the cookie jar and disables partitioning by
+default
 
 =head1 API
 
 =head2 User Agent Context Flags
 
-Flags are used to mark the intent of a request initiated by a user-agent. 
+Flags are implemented as constants and can be exported using the  ":flags" tag
+at import:
+
+  use HTTP::State ":flags";
+
+They are used to describe the intent and context of a request initiated by a
+user-agent in a space efficient manner. Multiple flags are ORed together into a
+bit field. This bit field is required for storing and retrieval of cookies
+throughout this API.
+
 
 =head3 FLAG_SAME_SITE
 
 When this flag is set, request is considered "same-site". When unset, request
 is considered "cross-site".
 
+A same site request is one which loads resources for a document from the same
+host, using the same scheme for example.
+
 =head3 FLAG_TYPE_HTTP
 
 When this flag is set, request is considered "HTTP". When unset, request is
 considered "non-HTTP".
+
+In a browser this represents if a request for a resource was initiated by from
+a html document (HTTP) or from javascript (non-HTTP).
 
 =head3 FLAG_SAFE_METH
 
 When this flag is set, request is considered "safe". When unset, request is
 considered "unsafe".
 
+POST and PUT methods in HTTP are considered unsafe.
+
 =head3 FLAG_TOP_LEVEL
 
 When this flag is set, request is considered "top level". When unset, request
 is considered "not-top-level".
+
+Top level requests include manually typing in a URL and navigating to it and 
+
+
 
 =head2 Creating a cookie jar
 
@@ -164,9 +207,10 @@ Creates a new cookie jar object. Optional named arguments can be provided:
 Sets the default flags used for storing and retrieving cookies, when no defined
 value is provided via C<retrieve_cookies> and C<store_cookies>
 
-Is also the value used in the compatibility API
+It is also the value used in the compatibility API.
 
 Default is all flags on
+
 (FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|FLAG_SAME_SITE|FLAG_SAFE_METH).
 
 =item enable_partition
@@ -174,7 +218,9 @@ Default is all flags on
   my $jar=HTTP::State->new(enable_partition=>...);
 
 Enables partition support for partition cookies.  When enabled, cookies are
-stored in relevant partitions 
+stored in relevant partitions.
+
+The default value is false (off)
 
 =item retrieve_sort
 
@@ -373,7 +419,7 @@ seconds.
 Please refer to the L<HTTP::CookieJar> for further information.
 
 
-=head1 Algorithm
+=head1 ALGORITHM
 
 Some specific design tricks are used to improve the storage and retrieval
 process compared to other cookie jars.
@@ -433,6 +479,14 @@ L<HTTP::CookieJar> is the cookie jar suggested in the L<LWP> documentation.
 While it has public suffix support, it doesn't provide the additional
 conditions of RFC6265bis-draft. It is also quite slow in comparison to this
 module.
+
+=head1 SEE ALSO
+
+The main resources used in implementing this module:
+
+L<https://github.com/privacycg/CHIPS#opt-in-partitioned-cookies>
+L<https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis>
+L<https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies>
 
 =head1 AUTHOR
 
