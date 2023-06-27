@@ -1,14 +1,14 @@
 use strict;
 use warnings;
 use feature ":all";
-##################################
-# use Data::Dumper;              #
-# use Log::ger::Output "Screen"; #
-# use Log::OK {                  #
-#   lvl=>"info",                 #
-#   opt=>"verbose"               #
-# };                             #
-##################################
+use Data::Dumper;
+use Log::ger::Output "Screen";
+
+use Log::OK {
+  lvl=>"info",
+  opt=>"verbose"
+};
+
 use Test::More;
 use HTTP::State;
 use HTTP::State::Cookie ":all";
@@ -25,7 +25,7 @@ use HTTP::State::Cookie ":all";
 
   my $url="$request_scheme://$request_host$request_path";
 
-  $jar->store_cookies($url, 0xFF, $string);
+  $jar->store_cookies($url, undef,  0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -60,7 +60,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->store_cookies($url, 0xFF, $string);
+  $jar->store_cookies($url, undef,  0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -78,7 +78,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->store_cookies($url,0xFF,  $string);
+  $jar->store_cookies($url, undef, 0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -94,7 +94,7 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->store_cookies($url,0xFF,  $string);
+  $jar->store_cookies($url, undef, 0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   #say STDERR " COOKIE VALUE IS: ",join ", ", @dump;
@@ -111,13 +111,13 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->store_cookies($url,0xFF,  $string);
+  $jar->store_cookies($url, undef, 0xFF,  $string);
   my @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie added";
   
   $string="name=value; SameSite=None; Secure; Max-Age=-1";
-  $jar->store_cookies($url,0xFF,  $string);
+  $jar->store_cookies($url, undef, 0xFF,  $string);
   @dump=$jar->dump_cookies;
 
   ok @dump == 0,  "Cookie expired";
@@ -132,13 +132,13 @@ use HTTP::State::Cookie ":all";
   my $request_path="/path/to/file.pdf";
 
   my $url="$request_scheme://$request_host$request_path";
-  $jar->store_cookies($url, 0xFF, $string);
+  $jar->store_cookies($url, undef,  0xFF, $string);
   my @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie added";
   
   $string="name=new_value; SameSite=None; Secure;";
-  $jar->store_cookies($url,0xFF,  $string);
+  $jar->store_cookies($url, undef, 0xFF,  $string);
   @dump=$jar->dump_cookies;
 
   ok @dump == 1,  "Cookie updated";

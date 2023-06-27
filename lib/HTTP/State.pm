@@ -49,6 +49,7 @@ class HTTP::State;
 
 field $_get_cookies_sub :reader;  # Main cookie retrieval routine, reference.
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
+field %_partitions;
 field $_suffix_cache;# :param=undef; #Hash ref used as cache
 field $_public_suffix_sub :param=undef;        # Sub used for public suffix lookup.
 field $_second_level_domain_sub;
@@ -61,6 +62,8 @@ field $_retrieve_sort :param=undef;
 field $_max_expiry :param=400*24*3600; 
 
 field $_default_flags :param=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH;
+field $_enable_partition :param=1;
+
 
 field %_sld_cache;
 
@@ -123,7 +126,7 @@ sub _path_match {
 
 
 method store_cookies{
-  my ($request_uri, $flags, @cookies)=@_;
+  my ($request_uri, $partition, $flags, @cookies)=@_;
   #TODO: fix this
   $flags//=$_default_flags;
   Log::OK::TRACE and log_trace __PACKAGE__. " store_cookies";
@@ -184,6 +187,7 @@ method store_cookies{
   # $port//=80;                                                                          #
   ########################################################################################
 
+
   my $time=time-$tz_offset; #Cache time. Translate  to GMT
 
   # Iterate over the cookies supplied
@@ -201,6 +205,9 @@ method store_cookies{
       $c=decode_set_cookie($c_);
     }
     next unless $c;
+
+
+
 
     #1.
     # A user agent MAY ignore a received cookie in its entirety. See Section 5.3.
@@ -363,7 +370,7 @@ method store_cookies{
       }
       else{
         # Reject. no domain match
-        Log::OK::TRACE and log_trace __PACKAGE__."::set_cookie domain invalid";
+        Log::OK::TRACE and log_trace __PACKAGE__."::store_cookie domain invalid";
         next;
       }
     }
@@ -453,18 +460,27 @@ method store_cookies{
     #not for a path of '/login' or '/login/en'.
 
 
+    my $part;
     if(!$c->[COOKIE_SECURE] and $scheme ne "https"){
       
       # get the second level domain to act as base to start search
       $sld//=$_sld_cache{$c->[COOKIE_DOMAIN]}//=scalar reverse $_second_level_domain_sub->(scalar reverse $c->[COOKIE_DOMAIN]);
       next unless defined $sld;
 
-      my $index=search_string_left $sld, \@_cookies;
 
-      $index=@_cookies if $index<@_cookies  && (index($_cookies[$index][COOKIE_KEY], $sld)==0);
+      # Locate the parition
+
+      $part=($_enable_partition and $c->[COOKIE_PARTITION])
+        ?$_partitions{$partition}//=[]
+        :\@_cookies;
+      
+
+      my $index=search_string_left $sld, $part;
+
+      $index=@$part if $index<@$part && (index($_cookies[$index][COOKIE_KEY], $sld)==0);
       my $found;
       local $_;
-      while(!$found and $index<@_cookies){
+      while(!$found and $index<@$part){
         $_=$_cookies[$index];
         #exit the inner loop if the SLD is not a prefix of the current cookie key
         last if index $_->[COOKIE_KEY], $sld;
@@ -637,14 +653,21 @@ method store_cookies{
     #
     $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOSTONLY]";
     $c->[COOKIE_MAX_AGE]=undef; # No longer need this, so 
-    Log::OK::TRACE and log_trace __PACKAGE__."::set_cookie key: $c->[COOKIE_KEY]";
+    Log::OK::TRACE and log_trace __PACKAGE__."::store_cookie key: $c->[COOKIE_KEY]";
+
+    # Locate the parition
+
+    $part=($_enable_partition and $c->[COOKIE_PARTITION])
+      ?$_partitions{$partition}//=[]
+      :\@_cookies;
+
 
     # Lookup in database
     #Index of left side insertion
-    my $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
+    my $index=search_string_left $c->[COOKIE_KEY], $part;
 
     #Test if actually found or just insertion point
-    my $found=($index<@_cookies  && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
+    my $found=($index<@$part && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
 
     if($found){
         #reject if api call http only cookie currently exists
@@ -653,7 +676,7 @@ method store_cookies{
         if($c->[COOKIE_EXPIRES]<=$time){
           # Found but expired by new cookie. Delete the cookie
           Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired. purging";
-          splice @_cookies, $index, 1;
+          splice @$part , $index, 1;
         }
         else {
           # replace existing cookie
@@ -669,12 +692,12 @@ method store_cookies{
     else {
           # insert new cookie
           Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
-          unless(@_cookies){
-            push @_cookies, $c;
+          unless(@$part ){
+            push @$part , $c;
           }
           else{
             #Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
-            splice @_cookies, $index, 0, $c;
+            splice @$part , $index, 0, $c;
           }
     }
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 23, 24 OK";
@@ -685,7 +708,7 @@ method store_cookies{
 
 method _make_get_cookies{
  $_get_cookies_sub=sub {
-    my ($request_uri, $flags)=@_;
+    my ($request_uri, $partition, $flags)=@_;
     $flags//=$_default_flags;
 
     my $index;
@@ -738,17 +761,22 @@ method _make_get_cookies{
     my $time=time-$tz_offset;
     my @output;
 
-    $index=search_string_left $sld, \@_cookies;
+    my $part=
+      $partition
+        ? $_partitions{$partition}//[]
+        : \@_cookies;
+    
+    $index=search_string_left $sld, $part;
 
     Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
     Log::OK::TRACE and log_trace  "looking for host: $sld";
 
     local $_;
 
-    $index++ unless @_cookies;  # Force skip the test loop if no cookies in the jar
+    $index++ unless @$part;  # Force skip the test loop if no cookies in the jar
 
-    while( $index<@_cookies){
-      $_=$_cookies[$index];
+    while($index<@$part){
+      $_=$part->[$index];
 
       # End the search when the $sld of request is no longer a prefix for the
       # cookie domain being tested
@@ -757,7 +785,7 @@ method _make_get_cookies{
       # Process expire. Do not update $index
       if($_->[COOKIE_EXPIRES] <= $time){
         Log::OK::TRACE and log_trace "cookie under test expired. removing";
-        splice @_cookies, $index, 1;
+        splice @$part, $index, 1;
         next;
       }
 
@@ -878,7 +906,7 @@ method clear{
   $self;
 }
 method add {
-  $self->store_cookies(shift, $_default_flags, @_);
+  $self->store_cookies(shift, undef, $_default_flags, @_);
 }
 
 method cookie_header {

@@ -94,7 +94,7 @@ cmpthese 1, {
     for(@sample){
       #say $urls[$_];
       #say $cookies[$_];
-      $http_state_jar->store_cookies($urls[$_], 0xFF, $cookies[$_]);
+      $http_state_jar->store_cookies($urls[$_], undef, 0xFF, $cookies[$_]);
       #say Dumper $http_state_jar->db;
     }
   },
@@ -141,6 +141,7 @@ say "Size of protocol http_cookiejar: ".@flat;
 my @samples=map int rand(@urls), 1..@cookies;
 my @results=([],[],[]);
 cmpthese -1, {
+
   http_state=>sub { 
     for(@samples){
       #say $urls[$_];
@@ -149,6 +150,7 @@ cmpthese -1, {
       push $results[0]->@*, $string;
     }
   },
+
   http_cookiejar=>sub {
     for(@samples){
       my $string=$http_cookiejar->cookie_header($urls[$_]);

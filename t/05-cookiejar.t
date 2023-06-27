@@ -33,7 +33,7 @@ my $string=encode_set_cookie($cookie);
 ok $string=~/some_name=some_value/, "set cookie encode";
 
 #Add cookie to jar
-$jar->store_cookies($request_url, undef, $string);
+$jar->store_cookies($request_url, undef,  undef, $string);
 
 $cookie=cookie_struct(
   some_other_name=>"some_value2",
@@ -41,7 +41,7 @@ $cookie=cookie_struct(
   "max-age"=>2
 );
 
-$jar->store_cookies($request_url, undef, $cookie);
+$jar->store_cookies($request_url,  undef, undef, $cookie);
 
 
 $cookie=cookie_struct(
@@ -49,7 +49,7 @@ $cookie=cookie_struct(
   COOKIE_HTTPONLY, 1,
 );
 
-$jar->store_cookies($request_url, undef, $cookie);
+$jar->store_cookies($request_url,  undef, undef, $cookie);
 
 #should be 3 cookies in the jar now
 

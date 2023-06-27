@@ -1,6 +1,6 @@
 =head1 NAME
 
-HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
+HTTP::State - RFC6265bis-draft and CHIPS Cookie Jar for HTTP Clients
 
 =head1 SYNOPSIS
 
@@ -15,13 +15,14 @@ HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
   #
   my $request_url="http://test.example.com";
 
+  my $partition= "https://first.party.com";
 
 
   # Retrieve encoded cookies name/values applicable for the request. User agent
   # indicates the context of the request using flags.
   #
   my $flags=FLAGS_TYPE_HTTP|FLAGS_TOP_LEVEL|...;
-  my $cookie_header = $jar->retrieve_cookies($request_url, $flags);
+  my $cookie_header = $jar->retrieve_cookies($request_url, $partition, $flags);
   
   #       OR 
 
@@ -41,7 +42,7 @@ HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
 
   # Store the  Set-Cookies in the jar for the request url w
   #
-  $jar->store_cookies($request_url, $flags, $response->header->{Set_Cookie});
+  $jar->store_cookies($request_url, $partition, $flags, $response->header->{Set_Cookie});
 
   #     OR
 
@@ -52,9 +53,10 @@ HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
 =head1 DESCRIPTION
 
 
-An up to date cookie processing module, implementing a RFC6265bis-draft based
-"cookie jar" for HTTP user agents.  At the time of writing the current draft is
-'12'. As the RFC progresses this module will be updated accordingly.
+An up to date cookie processing module, implementing a RFC6265bis-draft "cookie
+jar" with additional CHIPS (Partitioning) support.  At the time of writing the
+current draft is '12'. As the RFC progresses this module will be updated
+accordingly.
 
 A summary of cookie handling benefits from RFC6265bis-draft include: 
 
@@ -90,10 +92,18 @@ It is necessary the user agent performs additional book keeping and testing
 of what is a 'same site' request, top level navigation, reloading, document etc
 to fully utilise the additional functionality available in this module.
 
+
 While these tests/conditions are specified in RFC6265bis-draft, it is not in
 the scope of this module and needs to be implemented in a user-agent.  The
 results of such tests are represented as bit fields, which are used to guide
 the store/retrieve algorithm accordingly within this module.
+
+=head1 PARTITIONING
+
+Cookies Having Independent Partitioned State
+Partitioning of cookies is also supported but must be enabled when a cookie jar
+is created.  User agent must provided the scheme and host of the first party
+site as the partition key.
 
 
 =head1 COMPATIBILITY
@@ -137,7 +147,7 @@ considered "unsafe".
 When this flag is set, request is considered "top level". When unset, request
 is considered "not-top-level".
 
-=head2 Createing a cookie jar
+=head2 Creating a cookie jar
 
 =head3 new
 
@@ -159,6 +169,12 @@ Is also the value used in the compatibility API
 Default is all flags on
 (FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|FLAG_SAME_SITE|FLAG_SAFE_METH).
 
+=item enable_partition
+
+  my $jar=HTTP::State->new(enable_partition=>...);
+
+Enables partition support for partition cookies.  When enabled, cookies are
+stored in relevant partitions 
 
 =item retrieve_sort
 
@@ -175,7 +191,7 @@ Default is false (no sorting).
 
 The upper limit in duration a cookie can be valid for.  Value is in seconds.
 
-Default is 400 days (400 * 24* 3600)
+Default is 400 days (400 * 24 * 3600)
 
 =item lax_allowing_unsafe
 
@@ -218,7 +234,7 @@ better use of 'browsing context'.
 
 =head3 store_cookies
 
-  $jar->store_cookies($request_uri, $flags, $string_or_struct, ...);
+  $jar->store_cookies($request_uri, $partition, $flags, $string_or_struct, ...);
 
 Takes a C<$request_url> , browsing context C<$flags> and one or more Set-Cookie
 header string values B<or> cookie_structs. Stores them in the cookie jar as per
@@ -228,12 +244,16 @@ The exact processing of the cookies is subject to the C<$flags> bit field,
 which is a combination of the 'context flags'. If set to C<undef> the current
 default bit flags for the cookie jar will be used.
 
+The C<$partition> argument, is the name (scheme://host) of the first party
+site, which is used as a partition key. Cookies are stored to this partition if
+the jar was instantiated with the C<enable_partition> option.
+
 This method in intended to be called from a user-agent on receipt of a HTTP
 response.
 
 =head3 retrieve_cookies
 
-  $jar->retrieve_cookies($request_url, $flags); 
+  $jar->retrieve_cookies($request_url, $parition, $flags); 
 
 Retrieves cookies from a jar, for the specified C<$request_url> according to
 RFC6265bis-draft 'cookie retrieval'. The cookies are encodes them into a string
@@ -242,6 +262,10 @@ suitable for use in a Cookie header in a HTTP request.
 The exact processing of the cookies is subject to the C<$flags> bit field,
 which is a combination of the 'context flags'. If set to C<undef> the current
 default bit flags for the cookie jar will be used.
+
+The C<$partition> argument, is the name (scheme://host) of the first party
+site, which is used as a partition key. Cookies are only retrieved from this
+partition if the jar was instantiated with the C<enable_partition> option.
 
 This method in intended to be called from a user-agent in generation of a HTTP
 request.

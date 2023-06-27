@@ -66,6 +66,7 @@ RFC6265bis-draft:
 		Secure
 		HTTPOnly
 		SameSite
+    Partitioned
 
 Any other name is silently ignored.
 

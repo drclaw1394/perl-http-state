@@ -45,6 +45,7 @@ BEGIN {
 		Secure
 		HttpOnly
 		SameSite
+    Partition
     
     Creation_Time
     Last_Access_Time
@@ -284,8 +285,11 @@ sub decode_set_cookie{
   for($values[COOKIE_SAMESITE]//()){
     $_=$same_site_reverse{lc $_};
   }
-
+  # Ensure host only is defined
   $values[COOKIE_HOSTONLY]//=0;
+
+
+  
 
   \@values;
 }
