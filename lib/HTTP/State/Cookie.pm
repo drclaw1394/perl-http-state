@@ -172,6 +172,7 @@ sub decode_cookies {
 # given
 #
 sub decode_set_cookie{
+  return undef unless $_[0];
   no warnings "experimental";
   # $string, converter
   my $input=$_[0];
@@ -351,7 +352,7 @@ sub encode_set_cookie {
     #
 	  $string.="; Creation_Time=".($cookie->[COOKIE_CREATION_TIME]+$store_flag);
 	  $string.="; Last_Access_Time=".($cookie->[COOKIE_LAST_ACCESS_TIME]+$store_flag);
-	  $string.="; HostOnly" if defined $cookie->[COOKIE_HOSTONLY];				
+	  $string.="; HostOnly" if $cookie->[COOKIE_HOSTONLY];				
     $string.="; Partitioned=$partition_key" if $cookie->[COOKIE_PARTITIONED] and $partition_key;   #Store the partition key in the partitioned field
     #$string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
   }
@@ -397,7 +398,7 @@ sub hash_set_cookie{
   if(defined $store_flag){
     # If asked for storage format, give internal values
     #
-	  $hash{hostonly}=1 if defined $cookie->[COOKIE_HOSTONLY];				
+	  $hash{hostonly}=1 if $cookie->[COOKIE_HOSTONLY];				
 	  $hash{creation_time}=($cookie->[COOKIE_CREATION_TIME]+$store_flag);
 	  $hash{access_time}=($cookie->[COOKIE_LAST_ACCESS_TIME]+$store_flag);
   }

@@ -336,13 +336,15 @@ method store_cookies{
         $_public_suffix_sub->(scalar reverse $c->[COOKIE_DOMAIN]);
 
       Log::OK::TRACE and log_trace "Looking up $c->[COOKIE_DOMAIN]=>$suffix";
-      if($suffix){
-        if($suffix eq $c->[COOKIE_DOMAIN]){
+      if($suffix and $suffix eq $c->[COOKIE_DOMAIN]){
+        if($rhost eq $c->[COOKIE_DOMAIN]){
+
+          Log::OK::TRACE and log_trace " Domain is equal to host, which is a suffix";
+          $c->[COOKIE_DOMAIN]="";
+        }
+        else {
           Log::OK::TRACE and log_trace "Domain is public suffix. reject";
           next;
-        }
-        elsif($c->[COOKIE_DOMAIN] eq $rhost){
-          $c->[COOKIE_DOMAIN]="";
         }
       }
     }
@@ -477,11 +479,11 @@ method store_cookies{
       for my $part (@parts){
         my $index=search_string_left $sld, $part;
 
-        $index=@$part if $index<@$part && (index($_cookies[$index][COOKIE_KEY], $sld)==0);
+        $index=@$part if $index<@$part and (index($part->[$index][COOKIE_KEY], $sld)==0);
         my $found;
         local $_;
         while(!$found and $index<@$part){
-          $_=$_cookies[$index];
+          $_=$part->[$index];
           #exit the inner loop if the SLD is not a prefix of the current cookie key
           last if index $_->[COOKIE_KEY], $sld;
 
@@ -664,14 +666,17 @@ method store_cookies{
       # Lookup in database
       #Index of left side insertion
       my $index=search_string_left $c->[COOKIE_KEY], $part;
+      #say "insertion index: ", $index;
+      #say "Looking for  cookie key: ".$c->[COOKIE_KEY];
+      #say " against cookie key:     ".$part->[$index][COOKIE_KEY];
 
       #Test if actually found or just insertion point
-      my $found=($index<@$part && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
+      my $found=($index<@$part and ($part->[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
 
       if($found){
           #reject if api call http only cookie currently exists
-          next if $_cookies[$index][COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP);
-          $c->[COOKIE_CREATION_TIME]=$_cookies[$index][COOKIE_CREATION_TIME];
+          next if $part->[$index][COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP);
+          $c->[COOKIE_CREATION_TIME]=$part->[$index][COOKIE_CREATION_TIME];
           if($c->[COOKIE_EXPIRES]<=$time){
             # Found but expired by new cookie. Delete the cookie
             Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired. purging";
@@ -680,7 +685,7 @@ method store_cookies{
           else {
             # replace existing cookie
             Log::OK::TRACE and log_trace __PACKAGE__. " found cookie. Updating";
-            $_cookies[$index]=$c;
+            $part->[$index]=$c;
           }
       }
 
@@ -912,6 +917,7 @@ method db {
 # Returns self for chaining
 method clear{
   @_cookies=(); #Clear the db
+  %_partitions=();
   $self;
 }
 method add {
@@ -919,7 +925,7 @@ method add {
 }
 
 method cookie_header {
-  splice @_,1, 0, $_default_flags;
+  splice @_, 1, 0, undef, $_default_flags;
   my $cookies=&$_get_cookies_sub;
 }
 
@@ -944,6 +950,10 @@ method load_cookies{
   my $time=time-$tz_offset;
   my $c;
   for my $s (@_){
+
+    Log::OK::TRACE and log_trace "+++";
+    Log::OK::TRACE and log_trace "loading cookie from string";
+    Log::OK::TRACE and log_trace $s;
     next unless $c=decode_set_cookie($s, $tz_offset);
     # Don't load if cookie is expired
     #
@@ -965,6 +975,7 @@ method load_cookies{
 
     # update the list
     unless(@$part){
+      Log::OK::TRACE and log_trace "Pushing cookie in to empty jar/parition";
       push @$part, $c;
     }
     else{
@@ -973,12 +984,17 @@ method load_cookies{
       $index=search_string_left $c->[COOKIE_KEY], $part;#\@_cookies;
       # If the key is identical, then we prefer the latest cookie,
       # TODO: Fix key with scheme?
-      my $replace= ($index<@$part and ($part->[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]))
-        ? 1
-        : 0;
+      if($index<@$part and ($part->[$index][COOKIE_KEY] eq $c->[COOKIE_KEY])){
+        Log::OK::TRACE and log_trace "replace cookie in jar/parition";
+        $part->[$index]=$c;
+      }
+      else {
+        Log::OK::TRACE and log_trace "splicing cookie in to jar/parition";
+        splice @$part, $index,1,$c;
+      }
 
 
-      splice @$part, $index, $replace, $c;
+      #splice @$part, $index, $replace, $c;
     }
   }
 }
