@@ -15,16 +15,21 @@ my $jar=HTTP::State->new(default_flags=>FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|...);
 #
 my $request_url="http://test.example.com";
 
-my $partition= "https://first.party.com";
+# First party site of the request ( for CHIPS )
+#
+my $partition_key= "https://first.party.com";
 
-
-# Retrieve encoded cookies name/values applicable for the request. User agent
-# indicates the context of the request using flags.
+# User agent indicates the context of the request using flags
 #
 my $flags=FLAGS_TYPE_HTTP|FLAGS_TOP_LEVEL|...;
-my $cookie_header = $jar->retrieve_cookies($request_url, $partition, $flags);
 
-#       OR 
+
+
+# Retrieve encoded cookies name/values applicable for the request.
+#
+my $cookie_header = $jar->retrieve_cookies($request_url, $partition_key, $flags);
+
+#       ++ OR ++
 
 # use the  HTTP::CookieJar compatible API, jar's default flags
 #
@@ -42,9 +47,9 @@ my $response=user_agent->get(cookie_header=>$cookie_header);
 
 # Store the  Set-Cookies in the jar for the request url
 #
-$jar->store_cookies($request_url, $partition, $flags, $response->header->{Set_Cookie});
+$jar->store_cookies($request_url, $partition_key, $flags, $response->header->{Set_Cookie});
 
-#     OR
+#     ++ OR ++
 
 # use the HTTP::CookieJar compatible API, using the default flags
 $jar->add($request_url, $response->header->{Set_Cookie});
@@ -61,14 +66,14 @@ Having Independent Partitioned State (CHIPS)**. These are not finalised
 standards, so it is to be expected this module may change behaviour to keep up
 to date.
 
-To aid adoption, this module will work as a drop in replacement for
+To aid adoption, this module will work as a drop in alternative for
 [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar).  A compatible API has been implemented to allow existing
-user agents to benefit from the performance gains.
+user agents to benefit from the performance gains in particular.
 
-However long term, user agents will need to be modified in order to take full
-advantage of this module. Not only are there differences in the general API
-compared to popular cookie jars, but conceptually the notion of 'browsing
-context' needs to be implemented.
+However long term, user agents would need to be modified, or at least wrapped
+in order to take full advantage of this module. Not only are there differences
+in the general API compared to popular cookie jars, but conceptually the notion
+of 'browsing context', and 'first-party/third-party' need to be implemented.
 
 Finally, for explicit encoding and decoding of cookie strings (not via a cookie
 jar), please see the companion [HTTP::State::Cookie](https://metacpan.org/pod/HTTP%3A%3AState%3A%3ACookie) module. This is used
@@ -288,7 +293,7 @@ $jar->store_cookies($request_uri, $partition, $flags, $string_or_struct, ...);
 ```
 
 Takes a `$request_url` , browsing context `$flags` and one or more Set-Cookie
-header string values **or** cookie\_structs. Stores them in the cookie jar as per
+header string values **or** cookie structures. Stores them in the cookie jar as per
 the 'storage model' of RFC6265bis-draft.
 
 The exact processing of the cookies is subject to the `$flags` bit field,
@@ -385,7 +390,7 @@ $jar->cookies_for($url);
 
 Returns a list of hash refs representing a set cookie for a target `$url`. The
 elements of each hash are named as per [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar). Additional elements
-could also exist (IE samesite)
+could also exist (ie samesite)
 
 Please refer to the [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) for further information.
 
@@ -440,25 +445,67 @@ this is present cookies are loaded into the specified partition.
 
 # PERFORMANCE
 
-Cookie retrieval (100 random cookies added):
+## Cookie Retrieval
+
+Relative performance of retrieving cookies for a request to a single host:
+
+1 cookie:
+
+```
+                   Rate http_cookiejar  protocol_http     http_state
+http_cookiejar 165217/s             --           -31%           -41%
+protocol_http  238602/s            44%             --           -15%
+http_state     279272/s            69%            17%             --
+```
+
+5 cookies:
+
+```
+                  Rate http_cookiejar     http_state  protocol_http
+http_cookiejar  5582/s             --           -80%           -81%
+http_state     27568/s           394%             --            -8%
+protocol_http  29824/s           434%             8%             --
+```
+
+50 cookies:
+
+```
+                  Rate http_cookiejar     http_state  protocol_http
+http_cookiejar 100.0/s             --           -97%           -97%
+http_state      2973/s          2873%             --            -8%
+protocol_http   3228/s          3128%             9%             --
+```
+
+100 cookies:
 
 ```
                  Rate http_cookiejar     http_state  protocol_http
-http_cookiejar 58.0/s             --           -96%           -97%
-http_state     1614/s          2682%             --           -19%
-protocol_http  1987/s          3325%            23%             --
+http_cookiejar 23.1/s             --           -98%           -98%
+http_state     1370/s          5835%             --            -5%
+protocol_http  1436/s          6121%             5%             --
+```
+
+1000 cookies:
+
+```
+                  Rate http_cookiejar  protocol_http     http_state
+http_cookiejar 0.233/s             --           -99%          -100%
+protocol_http   43.8/s         18738%             --           -76%
+http_state       179/s         76975%           309%             --
 ```
 
 # COMPARISON TO OTHER MODULES
 
 [Protocol::HTTP::CookieJar](https://metacpan.org/pod/Protocol%3A%3AHTTP%3A%3ACookieJar) is a very fast cookie jar module, also
-implementing RFC6265bis-draft. It requires a large number of XS modules to get
-going and does not at the time of writing support partitioned cookies.
+implementing RFC6265bis-draft. 
 
-[HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) is the cookie jar suggested in the [LWP](https://metacpan.org/pod/LWP) documentation.
-While it has public suffix support, it doesn't provide the additional
-conditions of RFC6265bis-draft. It is also quite slow in comparison to this
-module.
+However, it's API is targeted towards its related HTTP client, doesn't support
+CHIPS/partitioning and requires a large number of XS modules
+
+[HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) is the cookie jar expected by many user agents.  While it
+has public suffix support, it doesn't provide samesite processing or the
+additional conditions of RFC6265bis-draft or CHIPS/paritioning. It is also
+quite slow in comparison to this module.
 
 # SEE ALSO
 
@@ -473,6 +520,11 @@ The main resources used in implementing this module:
 - Create LWP adaptor
 - Mojo User Agnet adaptor
 - More tests
+
+# REPOSITORTY and BUGS
+
+Please report any bugs via git hub:
+[http://github.com/drclaw1394/perl-http-state](http://github.com/drclaw1394/perl-http-state)
 
 # AUTHOR
 

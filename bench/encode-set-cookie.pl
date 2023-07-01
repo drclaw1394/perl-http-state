@@ -12,7 +12,7 @@ use Protocol::HTTP::CookieJar;
 
 use Benchmark qw<cmpthese timethese>;
 use Data::Dumper;
-my $count=100;
+my $count=1600;
 my $origin_count=$count;#1000;#$ARGV[0]//1;
 my $path_count=$count;#1000;
 my $cookie_count=$count;#1000;

@@ -13,6 +13,5 @@ t/01-HTTP-State.t
 t/02-parse-set-cookie.t
 t/03-ordering.t
 t/04-storage-model.t
-t/05-cookiejar.t
 t/05-partition.t
 t/06-compat.t
