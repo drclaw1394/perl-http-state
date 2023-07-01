@@ -145,6 +145,9 @@ sub cookie_struct {
 
   }
 
+  $c[COOKIE_NAME]//="";
+  $c[COOKIE_VALUE]//="";
+
   # Remove any extra fields added in haste
   #
   #splice @c, COOKIE_KEY+1;

@@ -1,12 +1,14 @@
 use strict;
 use warnings;
 use feature "say";
-use Log::ger::Output "Screen";
-use Log::OK {
-  lvl=>"info",
-  opt=>"verbose"
-};
-use Data::Dumper;
+##################################
+# use Log::ger::Output "Screen"; #
+# use Log::OK {                  #
+#   lvl=>"info",                 #
+#   opt=>"verbose"               #
+# };                             #
+# use Data::Dumper;              #
+##################################
 use Test::More;
 use HTTP::State;
 use HTTP::State::Cookie qw<:encode :constants>;
@@ -35,7 +37,7 @@ for(@partition_key){
   $jar->store_cookies( $third_party_url, $_, undef, $c);
 }
 
-say STDERR join "\n", $jar->dump_cookies;
+#say STDERR join "\n", $jar->dump_cookies;
 my @dump=$jar->dump_cookies;
 
 ok @dump==@partition_key, "Correct count";

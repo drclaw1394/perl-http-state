@@ -131,6 +131,7 @@ requested by the first party site are stored in this 'partitioned cookie jar'.
 These cannot be used by another first party site requesting resources from the
 same third party site.  Hence limiting tracking. 
 
+=back
 
 =head2 COMPATIBILITY
 
@@ -444,8 +445,8 @@ Cookie retrieval (100 random cookies added):
 =head1 COMPARISON TO OTHER MODULES
 
 L<Protocol::HTTP::CookieJar> is a very fast cookie jar module, also
-implementing RFC6265bis-draft, though it requires a large number of XS modules
-to get going.
+implementing RFC6265bis-draft. It requires a large number of XS modules to get
+going and does not at the time of writing support partitioned cookies.
 
 L<HTTP::CookieJar> is the cookie jar suggested in the L<LWP> documentation.
 While it has public suffix support, it doesn't provide the additional
@@ -456,9 +457,27 @@ module.
 
 The main resources used in implementing this module:
 
-L<https://github.com/privacycg/CHIPS#opt-in-partitioned-cookies>
-L<https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis>
-L<https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies>
+=over
+
+=item L<https://github.com/privacycg/CHIPS#opt-in-partitioned-cookies>
+
+=item L<https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis>
+
+=item L<https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies>
+
+=back
+
+=head1 TODO
+
+=over
+
+=item Create LWP adaptor
+
+=item Mojo User Agnet adaptor
+
+=item More tests
+
+=back
 
 =head1 AUTHOR
 

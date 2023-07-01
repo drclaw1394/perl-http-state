@@ -47,7 +47,7 @@ for(0..$#hs){
 }
 
 
-say "";
+#say "";
 my $state_jar2=HTTP::State->new();
 my $cookie_jar2=HTTP::CookieJar->new();
 
