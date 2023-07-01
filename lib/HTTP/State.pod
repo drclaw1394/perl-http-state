@@ -40,7 +40,7 @@ HTTP::State - Fast RFC6265bis-draft + CHIPS Cookie Jar
 
 
 
-  # Store the  Set-Cookies in the jar for the request url w
+  # Store the  Set-Cookies in the jar for the request url
   #
   $jar->store_cookies($request_url, $partition, $flags, $response->header->{Set_Cookie});
 
@@ -52,30 +52,32 @@ HTTP::State - Fast RFC6265bis-draft + CHIPS Cookie Jar
 
 =head1 DESCRIPTION
 
-Web browsers are constantly improving privacy and limiting the traceability of
-cookies. This modules is a cookie jar providing the same up to date thinking to
-Perl user-agents. 
+Web browsers are constantly improving privacy and limiting the tracking ability
+of cookies. This modules is a cookie jar providing the same up to date thinking
+to Perl user-agents. 
 
-The algorithm implemented is derived from RFC6265bis-draft and Cookies Having
-Independent Partitioned State (CHIPS). As these are not finalised standards, it
-is to be expected this module may change behaviour to keep up to date.
+The algorithm implemented is derived from B<RFC6265bis-draft-12> and B<Cookies
+Having Independent Partitioned State (CHIPS)>. These are not finalised
+standards, so it is to be expected this module may change behaviour to keep up
+to date.
 
 To aid adoption, a L<HTTP::CookieJar> compatible API is implemented using
-default values (specific to each jar instance) where needed.
+default value required to work with these new features where needed.
 
-Long term, existing user agents would need to be modified to take full
+Long term, existing user agents will need to be modified in order to take full
 advantage of this module. Not only are there differences in the API compared to
 popular cookie jars, but conceptually the notion of 'browsing context' needs to
 be implemented.
 
-For explicit encoding and decoding of cookie strings (not via a cookie jar),
-please see the companion L<HTTP::State::Cookie> module. This is used internally
-for encoding and decoding cookies.
+Finally, for explicit encoding and decoding of cookie strings (not via a cookie
+jar), please see the companion L<HTTP::State::Cookie> module. This is used
+internally for encoding and decoding cookies.
 
 =head2 Summary of RFC6265bis and CHIPS
 
-At the time of writing RFC6265vis at draft '12'. As the RFC progresses this
-module will be updated accordingly. 
+At the time of writing RFC6265bis-draft is a version '12'. As the RFC
+progresses this module will be updated accordingly. The highlight take away
+feature implemented/utilized in this module are:
 
 =over
 
@@ -90,15 +92,16 @@ information leakage at a basic level.
 Cookies names prefixed with __Host- and __Secure- are subject to addition
 requirements before being stored.
 
-=item Restricted upper limit of expiry dates
+=item Reduced pper limit of expiry dates
 
-Cookies are restricted expire 400 days in the future, instead 
+Cookies expire 400 days (or user defined) in the future, instead of potentially
+years.
 
 =item Browsing Context
 
-It is necessary the user agent performs additional book keeping and testing
-of what is a 'same site' request, top level navigation, reloading, document etc
-to fully utilise the additional functionality available in this module.
+User agents should be performing additional book keeping and testing of what is
+a 'same site' request, top level navigation, reloading, document etc to fully
+utilise the additional functionality available in this module.
 
 While these tests/conditions are specified in RFC6265bis-draft, it is not in
 the scope of this module and needs to be implemented in a user-agent.  The
@@ -124,17 +127,16 @@ Cookies Having Independent Partitioned State (CHIPS), effectively gives each
 first party site it's own cookie jar. Third party cookies set from resources
 requested by the first party site are stored in this 'partitioned cookie jar'.
 
-These cannot be used by another first party site, requesting resources from the
-same third party site. 
+These cannot be used by another first party site requesting resources from the
+same third party site.  Hence limiting tracking. 
 
-=back
 
-=head1 COMPATIBILITY
+=head2 COMPATIBILITY
 
 A compatibility interface matching that of  L<HTTP::CookieJar> is available to
-aid in adoption of this module.
+aid in adoption.
 
-This in theory should allow user-agents like L<HTTP::Tiny> and L<Furl> for
+In theory, this should allow user-agents like L<HTTP::Tiny> and L<Furl> for
 example to benefit from performance and security improvements with limited
 changes to existing code.
 
@@ -142,6 +144,7 @@ To work around the lack of same site / browsing context / partitioning support
 in the L<HTTP::CookieJar> API, the compatibility API utilises the current
 values of the 'default flags' for the cookie jar and disables partitioning by
 default
+
 
 =head1 API
 
@@ -152,19 +155,22 @@ at import:
 
   use HTTP::State ":flags";
 
-They are used to describe the intent and context of a request initiated by a
-user-agent in a space efficient manner. Multiple flags are ORed together into a
-bit field. This bit field is required for storing and retrieval of cookies
+They are a space efficient method of describing the intent and context of a
+request initiated by a user-agent. Multiple flags are ORed together into a bit
+field. This bit field is required for storing and retrieval of cookies
 throughout this API.
 
+As mentioned previously, the user-agent or other external code is responsible
+for performing tests on the context.  The flags are for conveying the results
+to the cookie jar.
 
 =head3 FLAG_SAME_SITE
 
-When this flag is set, request is considered "same-site". When unset, request
+When this flag is set, a request is considered "same-site". When unset, request
 is considered "cross-site".
 
 A same site request is one which loads resources for a document from the same
-host, using the same scheme for example.
+host and scheme as the current 'document' for example.
 
 =head3 FLAG_TYPE_HTTP
 
@@ -187,7 +193,6 @@ When this flag is set, request is considered "top level". When unset, request
 is considered "not-top-level".
 
 Top level requests include manually typing in a URL and navigating to it and 
-
 
 
 =head2 Creating a cookie jar
@@ -290,9 +295,9 @@ The exact processing of the cookies is subject to the C<$flags> bit field,
 which is a combination of the 'context flags'. If set to C<undef> the current
 default bit flags for the cookie jar will be used.
 
-The C<$partition> argument, is the name (scheme://host) of the first party
-site, which is used as a partition key. Cookies are stored to this partition if
-the jar was instantiated with the C<enable_partition> option.
+The C<$partition> argument, is the partition hey scheme://host) of the first
+party site. Cookies are stored to this partition if the jar was instantiated
+with the C<enable_partition> option.
 
 This method in intended to be called from a user-agent on receipt of a HTTP
 response.
@@ -419,43 +424,6 @@ seconds.
 Please refer to the L<HTTP::CookieJar> for further information.
 
 
-=head1 ALGORITHM
-
-Some specific design tricks are used to improve the storage and retrieval
-process compared to other cookie jars.
-
-=over 
-
-=item Keyed
-
-Cookies are uniquely identified by the domain, path, name and  host only flag
-(as per RFC6265bis-draft). These are combined into a key, which make it easy to
-sort
-
-=item Reversed Domain Names
-
-The domain value (in the key and domain field) is stored in reverse, allowing
-the use of C<index> to do domain matching of the key directly as  prefix instead of a suffix.
-
-
-=item Cached public suffix
-
-Public suffix lookups are cached and also stored in reverse for direct
-substring comparison to domains.
-
-
-=item Binary Search
-
-Sorting and searching of the cookies is done firstly by 'second level domain'
-of a request URL using binary search provided by L<List::Insertion>
-
-=item Preresolved subroutine references
-
-The main retrieval subroutine is an anonymous sub instead of a method, for
-better argument reuse and no unneeded dynamic lookup.
-
-=back
-
 =head1 PERFORMANCE
 
 Cookie retrieval (100 random cookies added):
@@ -465,9 +433,6 @@ Cookie retrieval (100 random cookies added):
   http_state     1614/s          2682%             --           -19%
   protocol_http  1987/s          3325%            23%             --
 
-=head1 TODO
-
-Encode jar to other formats
 
 =head1 COMPARISON TO OTHER MODULES
 

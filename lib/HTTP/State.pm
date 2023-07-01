@@ -1,5 +1,7 @@
 package HTTP::State;
 
+use strict;
+use warnings;
 use feature "say";
 
 our $VERSION="v0.1.0";
@@ -47,6 +49,7 @@ our %EXPORT_TAGS=("flags"=>\@const);
 
 class HTTP::State;
 
+no warnings "experimental";
 field $_get_cookies_sub :reader;  # Main cookie retrieval routine, reference.
 field @_cookies; # An array of cookie 'structs', sorted by the COOKIE_KEY field
 field %_partitions;
@@ -62,7 +65,6 @@ field $_retrieve_sort :param=undef;
 field $_max_expiry :param=400*24*3600; 
 
 field $_default_flags :param=FLAG_SAME_SITE|FLAG_TYPE_HTTP|FLAG_SAFE_METH;
-field $_enable_partition :param=1;
 
 
 field %_sld_cache;
@@ -126,7 +128,7 @@ sub _path_match {
 
 
 method store_cookies{
-  my ($request_uri, $partition, $flags, @cookies)=@_;
+  my ($request_uri, $partition_key, $flags, @cookies)=@_;
   #TODO: fix this
   $flags//=$_default_flags;
   Log::OK::TRACE and log_trace __PACKAGE__. " store_cookies";
@@ -468,29 +470,28 @@ method store_cookies{
       next unless defined $sld;
 
 
-      # Locate the parition
+      # IF partitions are enabled and the cookie is partitioned then lookup partition
+      # otherwise use normal cookies array
+      #
+      my @parts=(($partition_key and $c->[COOKIE_PARTITIONED])?$_partitions{$partition_key}//=[]: \@_cookies);
+      for my $part (@parts){
+        my $index=search_string_left $sld, $part;
 
-      $part=($_enable_partition and $c->[COOKIE_PARTITION])
-        ?$_partitions{$partition}//=[]
-        :\@_cookies;
-      
+        $index=@$part if $index<@$part && (index($_cookies[$index][COOKIE_KEY], $sld)==0);
+        my $found;
+        local $_;
+        while(!$found and $index<@$part){
+          $_=$_cookies[$index];
+          #exit the inner loop if the SLD is not a prefix of the current cookie key
+          last if index $_->[COOKIE_KEY], $sld;
 
-      my $index=search_string_left $sld, $part;
+          next SET_COOKIE_LOOP if $_->[COOKIE_SECURE]
+          and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]    #name match
+          and (index($_->[COOKIE_DOMAIN], $sld)==0 or index($sld, $_->[COOKIE_DOMAIN])==0)        # symmetric match
+          and _path_match $c->[COOKIE_PATH], $_;    #path match
 
-      $index=@$part if $index<@$part && (index($_cookies[$index][COOKIE_KEY], $sld)==0);
-      my $found;
-      local $_;
-      while(!$found and $index<@$part){
-        $_=$_cookies[$index];
-        #exit the inner loop if the SLD is not a prefix of the current cookie key
-        last if index $_->[COOKIE_KEY], $sld;
-
-        next SET_COOKIE_LOOP if $_->[COOKIE_SECURE]
-        and $_->[COOKIE_NAME] eq $c->[COOKIE_NAME]    #name match
-        and (index($_->[COOKIE_DOMAIN], $sld)==0 or index($sld, $_->[COOKIE_DOMAIN])==0)        # symmetric match
-        and _path_match $c->[COOKIE_PATH], $_;    #path match
-
-        $index++;
+          $index++;
+        }
       }
     }
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 16 OK";
@@ -657,48 +658,47 @@ method store_cookies{
 
     # Locate the parition
 
-    $part=($_enable_partition and $c->[COOKIE_PARTITION])
-      ?$_partitions{$partition}//=[]
-      :\@_cookies;
+    my @parts=(\@_cookies, ($partition_key and $c->[COOKIE_PARTITIONED])?$_partitions{$partition_key}//=[]: ());
 
+    for my $part (@parts){
+      # Lookup in database
+      #Index of left side insertion
+      my $index=search_string_left $c->[COOKIE_KEY], $part;
 
-    # Lookup in database
-    #Index of left side insertion
-    my $index=search_string_left $c->[COOKIE_KEY], $part;
+      #Test if actually found or just insertion point
+      my $found=($index<@$part && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
 
-    #Test if actually found or just insertion point
-    my $found=($index<@$part && ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]));
-
-    if($found){
-        #reject if api call http only cookie currently exists
-        next if $_cookies[$index][COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP);
-        $c->[COOKIE_CREATION_TIME]=$_cookies[$index][COOKIE_CREATION_TIME];
-        if($c->[COOKIE_EXPIRES]<=$time){
-          # Found but expired by new cookie. Delete the cookie
-          Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired. purging";
-          splice @$part , $index, 1;
-        }
-        else {
-          # replace existing cookie
-          Log::OK::TRACE and log_trace __PACKAGE__. " found cookie. Updating";
-          $_cookies[$index]=$c;
-        }
-    }
-
-    elsif($c->[COOKIE_EXPIRES]<$time){
-      Log::OK::TRACE and log_trace __PACKAGE__. " new cookie  already expired. rejecting";
-      next; # new cookie already expired.
-    }
-    else {
-          # insert new cookie
-          Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
-          unless(@$part ){
-            push @$part , $c;
+      if($found){
+          #reject if api call http only cookie currently exists
+          next if $_cookies[$index][COOKIE_HTTPONLY] and !($flags & FLAG_TYPE_HTTP);
+          $c->[COOKIE_CREATION_TIME]=$_cookies[$index][COOKIE_CREATION_TIME];
+          if($c->[COOKIE_EXPIRES]<=$time){
+            # Found but expired by new cookie. Delete the cookie
+            Log::OK::TRACE and log_trace __PACKAGE__. " found cookie and expired. purging";
+            splice @$part , $index, 1;
           }
-          else{
-            #Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
-            splice @$part , $index, 0, $c;
+          else {
+            # replace existing cookie
+            Log::OK::TRACE and log_trace __PACKAGE__. " found cookie. Updating";
+            $_cookies[$index]=$c;
           }
+      }
+
+      elsif($c->[COOKIE_EXPIRES]<$time){
+        Log::OK::TRACE and log_trace __PACKAGE__. " new cookie  already expired. rejecting";
+        next; # new cookie already expired.
+      }
+      else {
+            # insert new cookie
+            Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
+            unless(@$part ){
+              push @$part , $c;
+            }
+            else{
+              #Log::OK::TRACE and log_trace __PACKAGE__. " new cookie name. adding";
+              splice @$part , $index, 0, $c;
+            }
+      }
     }
     Log::OK::TRACE and log_trace __PACKAGE__. " Step 23, 24 OK";
   }
@@ -708,7 +708,7 @@ method store_cookies{
 
 method _make_get_cookies{
  $_get_cookies_sub=sub {
-    my ($request_uri, $partition, $flags)=@_;
+    my ($request_uri, $partition_key, $flags)=@_;
     $flags//=$_default_flags;
 
     my $index;
@@ -761,72 +761,79 @@ method _make_get_cookies{
     my $time=time-$tz_offset;
     my @output;
 
-    my $part=
-      $partition
-        ? $_partitions{$partition}//[]
-        : \@_cookies;
-    
-    $index=search_string_left $sld, $part;
+    # Search default cookies and also an existing parition. Don't create a new partition
+    my @parts=(\@_cookies, $_partitions{$partition_key}//());
+      #########################################
+      # #my $part=                            #
+      # $partition_key                        #
+      #   ? $_partitions{$partition_key}//=[] #
+      #   : ()                                #
+      # );                                    #
+      #########################################
+    for my $part (@parts){ 
 
-    Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
-    Log::OK::TRACE and log_trace  "looking for host: $sld";
+      $index=search_string_left $sld, $part;
 
-    local $_;
+      Log::OK::TRACE and log_trace __PACKAGE__. " index is: $index"; 
+      Log::OK::TRACE and log_trace  "looking for host: $sld";
 
-    $index++ unless @$part;  # Force skip the test loop if no cookies in the jar
+      local $_;
 
-    while($index<@$part){
-      $_=$part->[$index];
+      $index++ unless @$part;  # Force skip the test loop if no cookies in the jar
 
-      # End the search when the $sld of request is no longer a prefix for the
-      # cookie domain being tested
-      last if index $_->[COOKIE_DOMAIN], $sld;
+      while($index<@$part){
+        $_=$part->[$index];
 
-      # Process expire. Do not update $index
-      if($_->[COOKIE_EXPIRES] <= $time){
-        Log::OK::TRACE and log_trace "cookie under test expired. removing";
-        splice @$part, $index, 1;
-        next;
+        # End the search when the $sld of request is no longer a prefix for the
+        # cookie domain being tested
+        last if index $_->[COOKIE_DOMAIN], $sld;
+
+        # Process expire. Do not update $index
+        if($_->[COOKIE_EXPIRES] <= $time){
+          Log::OK::TRACE and log_trace "cookie under test expired. removing";
+          splice @$part, $index, 1;
+          next;
+        }
+
+
+
+
+        ## At this point we have a domain match ##
+
+        # Test for other restrictions...
+        $index++ and next if 
+             (!_path_match($path, $_))
+             or ($_->[COOKIE_HOSTONLY] and $rhost ne $_->[COOKIE_DOMAIN])
+             or ($_->[COOKIE_SECURE] and $scheme ne "https")
+             or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
+
+        if((not ($flags & FLAG_SAME_SITE)) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
+
+
+
+          
+          my $f=(($flags & FLAG_TYPE_HTTP) 
+              and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) 
+                  or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)
+                  )
+          );
+          $f&&=(($flags & FLAG_SAFE_METH) or (
+            $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
+            and ($time-$_->[COOKIE_CREATION_TIME]) < $_lax_allowing_unsafe_timeout 
+          ));
+
+          $f&&=($flags & FLAG_TOP_LEVEL);
+        }
+
+        #
+        # If we get here, cookie should be included!
+        #Update last access time
+        #
+        $_->[COOKIE_LAST_ACCESS_TIME]=$time;
+        Log::OK::TRACE and log_trace "Pushing cookie";
+        push @output, $_;   
+        $index++;
       }
-
-
-
-
-      ## At this point we have a domain match ##
-
-      # Test for other restrictions...
-      $index++ and next if 
-           (!_path_match($path, $_))
-           or ($_->[COOKIE_HOSTONLY] and $rhost ne $_->[COOKIE_DOMAIN])
-           or ($_->[COOKIE_SECURE] and $scheme ne "https")
-           or ($_->[COOKIE_HTTPONLY] and not $flags & FLAG_TYPE_HTTP);
-
-      if((not ($flags & FLAG_SAME_SITE)) and ($_->[COOKIE_SAMESITE] != SAME_SITE_NONE)){
-
-
-
-        
-        my $f=(($flags & FLAG_TYPE_HTTP) 
-            and (($_->[COOKIE_SAMESITE] == SAME_SITE_LAX) 
-                or  ($_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT)
-                )
-        );
-        $f&&=(($flags & FLAG_SAFE_METH) or (
-          $_lax_allowing_unsafe and $_->[COOKIE_SAMESITE] == SAME_SITE_DEFAULT
-          and ($time-$_->[COOKIE_CREATION_TIME]) < $_lax_allowing_unsafe_timeout 
-        ));
-
-        $f&&=($flags & FLAG_TOP_LEVEL);
-      }
-
-      #
-      # If we get here, cookie should be included!
-      #Update last access time
-      #
-      $_->[COOKIE_LAST_ACCESS_TIME]=$time;
-      Log::OK::TRACE and log_trace "Pushing cookie";
-      push @output, $_;   
-      $index++;
     }
      
     # TODO:
@@ -916,7 +923,12 @@ method cookie_header {
 
 method dump_cookies {
   my $all=$_[0]?!$_[0]{persistent}:1;
-  map  encode_set_cookie($_, $tz_offset) , grep $_->[COOKIE_PERSISTENT]||$all, @_cookies;
+  my @out=map  encode_set_cookie($_, $tz_offset) , grep $_->[COOKIE_PERSISTENT]||$all, @_cookies;
+  for my ($k)(sort keys %_partitions){
+    my $v=$_partitions{$k};
+    push @out, map  encode_set_cookie($_, $tz_offset, $k) , grep $_->[COOKIE_PERSISTENT]||$all, @$v;
+  }
+  @out;
 }
 
 method cookies_for{
@@ -939,22 +951,32 @@ method load_cookies{
     $c->[COOKIE_KEY]="$c->[COOKIE_DOMAIN] $c->[COOKIE_PATH] $c->[COOKIE_NAME] $c->[COOKIE_HOSTONLY]";
 
 
+    # Adjust the partitioned flag
+    my $partition_key=$c->[COOKIE_PARTITIONED];
+
+    my $part=\@_cookies;  #default is the unparitioned jar
+
+    if($partition_key){
+      $c->[COOKIE_PARTITIONED]=1;
+      $part=$_partitions{$partition_key}//=[];
+    }
+
     # update the list
-    unless(@_cookies){
-      push @_cookies, $c;
+    unless(@$part){
+      push @$part, $c;
     }
     else{
       # Do binary search
       #
-      $index=search_string_left $c->[COOKIE_KEY], \@_cookies;
+      $index=search_string_left $c->[COOKIE_KEY], $part;#\@_cookies;
       # If the key is identical, then we prefer the latest cookie,
       # TODO: Fix key with scheme?
-      my $replace= ($index<@_cookies and ($_cookies[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]))
-      ? 1
-      : 0;
+      my $replace= ($index<@$part and ($part->[$index][COOKIE_KEY] eq $c->[COOKIE_KEY]))
+        ? 1
+        : 0;
 
 
-      splice @_cookies, $index, $replace, $c;
+      splice @$part, $index, $replace, $c;
     }
   }
 }

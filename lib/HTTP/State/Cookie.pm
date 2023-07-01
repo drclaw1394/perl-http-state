@@ -45,7 +45,7 @@ BEGIN {
 		Secure
 		HttpOnly
 		SameSite
-    Partition
+    Partitioned
     
     Creation_Time
     Last_Access_Time
@@ -300,7 +300,7 @@ sub encode_cookies {
 }
 
 sub encode_set_cookie {
-  my ($cookie, $store_flag)=@_;
+  my ($cookie, $store_flag, $partition_key)=@_;
 	Log::OK::DEBUG and log_debug "Serializing set cookie";	
 
   # Start with name and value
@@ -349,6 +349,7 @@ sub encode_set_cookie {
 	  $string.="; Creation_Time=".($cookie->[COOKIE_CREATION_TIME]+$store_flag);
 	  $string.="; Last_Access_Time=".($cookie->[COOKIE_LAST_ACCESS_TIME]+$store_flag);
 	  $string.="; HostOnly" if defined $cookie->[COOKIE_HOSTONLY];				
+    $string.="; Partitioned=$partition_key" if $cookie->[COOKIE_PARTITIONED] and $partition_key;   #Store the partition key in the partitioned field
     #$string.="; Persistent" if $cookie->[COOKIE_PERSISTENT];
   }
   $string.="; $names[COOKIE_SAMESITE]=".$same_site_names[$cookie->[COOKIE_SAMESITE]] if $cookie->[COOKIE_SAMESITE];
