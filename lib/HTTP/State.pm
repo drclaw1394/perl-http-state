@@ -658,7 +658,7 @@ method store_cookies{
 
     # Locate the parition
 
-    my @parts=(\@_cookies, ($partition_key and $c->[COOKIE_PARTITIONED])?$_partitions{$partition_key}//=[]: ());
+    my @parts=(($partition_key and $c->[COOKIE_PARTITIONED])?$_partitions{$partition_key}//=[]: \@_cookies);
 
     for my $part (@parts){
       # Lookup in database
@@ -762,7 +762,7 @@ method _make_get_cookies{
     my @output;
 
     # Search default cookies and also an existing parition. Don't create a new partition
-    my @parts=(\@_cookies, $_partitions{$partition_key}//());
+    my @parts=(\@_cookies, ($partition_key and $_partitions{$partition_key})||());
       #########################################
       # #my $part=                            #
       # $partition_key                        #
@@ -770,6 +770,8 @@ method _make_get_cookies{
       #   : ()                                #
       # );                                    #
       #########################################
+      #use Data::Dumper; 
+    #say Dumper \@_cookies;
     for my $part (@parts){ 
 
       $index=search_string_left $sld, $part;
@@ -861,7 +863,7 @@ method _make_get_cookies{
 method get_cookies{
   # Do a copy of the matching entries
   #
-  map [@$_], $_get_cookies_sub->&*;
+  map [@$_], $_get_cookies_sub->&*->@*;
 }
 
 

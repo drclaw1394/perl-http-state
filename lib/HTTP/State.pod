@@ -53,21 +53,22 @@ HTTP::State - Fast RFC6265bis-draft + CHIPS Cookie Jar
 =head1 DESCRIPTION
 
 Web browsers are constantly improving privacy and limiting the tracking ability
-of cookies. This modules is a cookie jar providing the same up to date thinking
-to Perl user-agents. 
+of cookies. This module implements a cookie jar providing the same up to date
+thinking to Perl user-agents. 
 
 The algorithm implemented is derived from B<RFC6265bis-draft-12> and B<Cookies
 Having Independent Partitioned State (CHIPS)>. These are not finalised
 standards, so it is to be expected this module may change behaviour to keep up
 to date.
 
-To aid adoption, a L<HTTP::CookieJar> compatible API is implemented using
-default value required to work with these new features where needed.
+To aid adoption, this module will work as a drop in replacement for
+L<HTTP::CookieJar>.  A compatible API has been implemented to allow existing
+user agents to benefit from the performance gains.
 
-Long term, existing user agents will need to be modified in order to take full
-advantage of this module. Not only are there differences in the API compared to
-popular cookie jars, but conceptually the notion of 'browsing context' needs to
-be implemented.
+However long term, user agents will need to be modified in order to take full
+advantage of this module. Not only are there differences in the general API
+compared to popular cookie jars, but conceptually the notion of 'browsing
+context' needs to be implemented.
 
 Finally, for explicit encoding and decoding of cookie strings (not via a cookie
 jar), please see the companion L<HTTP::State::Cookie> module. This is used
@@ -110,13 +111,13 @@ the store/retrieve algorithm accordingly within this module:
 
 =over
 
-=item samesite
+=item samesite/crosssite
 
-=item API or HTTP
+=item API/HTTP
 
-=item safe method
+=item safe/unsafe method
 
-=item top level navigation
+=item top/nontop level navigation
 
 =back
 
@@ -304,7 +305,7 @@ response.
 
 =head3 retrieve_cookies
 
-  $jar->retrieve_cookies($request_url, $parition, $flags); 
+  $jar->retrieve_cookies($request_url, $partition, $flags); 
 
 Retrieves cookies from a jar, for the specified C<$request_url> according to
 RFC6265bis-draft 'cookie retrieval'. The cookies are encodes them into a string
@@ -329,7 +330,7 @@ request.
 =head3 get_cookies
 
   $jar->get_cookies($request_url);
-  $jar->get_cookies($request_url, $flags); 
+  $jar->get_cookies($request_url, $partition, $flags); 
 
 Takes the same arguments as C<retrieve_cookies> and matches the same cookies.
 Returns a copied list of the matched cookie structures instead of a encoded
@@ -411,6 +412,9 @@ persistent cookies to be processed, ignoring session cookies.
 Adjusts the creation and last access times to be relative to epoch in the local
 time, instead of GMT for interoperability with L<HTTP::CookieJar>. 
 
+Partitioned cookies are also included in the dump, with the partition key
+stored, for later loading.
+
 =head3 load_cookies
 
   $jar->load_cookies(@cookies)
@@ -422,6 +426,9 @@ Decodes the creation time and last access time expected in local timezone
 seconds. 
 
 Please refer to the L<HTTP::CookieJar> for further information.
+
+Partitioned cookies store the partition key in the Partitioned attribute. If
+this is present cookies are loaded into the specified partition.
 
 
 =head1 PERFORMANCE

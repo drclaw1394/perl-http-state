@@ -136,7 +136,7 @@ storage compatible with L<HTTP::CookieJar>.
 =head3 encode_set_cookie
 
   my $string=encode_set_cookie $cookie;
-  my $string=encode_set_cookie $cookie, $store_and_offset;
+  my $string=encode_set_cookie $cookie, $store_and_offset, $partition_key;
 
 Encodes a cookie into a string suitable as the value of HTTP Set-Cookie
 header.
@@ -147,6 +147,9 @@ to add to the internal creation and last access times.
 
 This is used by L<HTTP::State> to dump cookies in local time for storage
 compatible with L<HTTP::CookieJar>.
+
+If C<$partition_key> is defined, this is the partition key to store in the
+COOKIE_PARTITIONED field when C<$store_and_offset> is defined.
 
 =head3 decode_cookies
 
