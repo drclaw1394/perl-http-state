@@ -15,7 +15,17 @@ use Test::More;
 use HTTP::State ":flags";
 use HTTP::State::Cookie ":all";
 
-use HTTP::CookieJar;
+
+#Skip this test if HTTP::Cookie jar is not installed
+BEGIN{
+  eval { require HTTP::CookieJar};
+  if($@){
+    plan skip_all=>1;
+  }
+}
+
+
+#use HTTP::CookieJar;
 
 
 my @strings=(

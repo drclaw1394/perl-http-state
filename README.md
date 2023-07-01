@@ -1,6 +1,6 @@
 # NAME
 
-HTTP::State - RFC6265bis-draft Cookie Jar for HTTP Clients
+HTTP::State - Fast RFC6265bis-draft + CHIPS Cookie Jar
 
 # SYNOPSIS
 
@@ -15,13 +15,14 @@ my $jar=HTTP::State->new(default_flags=>FLAG_TYPE_HTTP|FLAG_TOP_LEVEL|...);
 #
 my $request_url="http://test.example.com";
 
+my $partition= "https://first.party.com";
 
 
 # Retrieve encoded cookies name/values applicable for the request. User agent
 # indicates the context of the request using flags.
 #
 my $flags=FLAGS_TYPE_HTTP|FLAGS_TOP_LEVEL|...;
-my $cookie_header = $jar->retrieve_cookies($request_url, $flags);
+my $cookie_header = $jar->retrieve_cookies($request_url, $partition, $flags);
 
 #       OR 
 
@@ -39,9 +40,9 @@ my $response=user_agent->get(cookie_header=>$cookie_header);
 
 
 
-# Store the  Set-Cookies in the jar for the request url w
+# Store the  Set-Cookies in the jar for the request url
 #
-$jar->store_cookies($request_url, $flags, $response->header->{Set_Cookie});
+$jar->store_cookies($request_url, $partition, $flags, $response->header->{Set_Cookie});
 
 #     OR
 
@@ -51,79 +52,140 @@ $jar->add($request_url, $response->header->{Set_Cookie});
 
 # DESCRIPTION
 
-An up to date cookie processing module, implementing a RFC6265bis-draft based
-"cookie jar" for HTTP user agents.  At the time of writing the current draft is
-'12'. As the RFC progresses this module will be updated accordingly.
+Web browsers are constantly improving privacy and limiting the tracking ability
+of cookies. This module implements a cookie jar providing the same up to date
+thinking to Perl user-agents. 
 
-A summary of cookie handling benefits from RFC6265bis-draft include: 
+The algorithm implemented is derived from **RFC6265bis-draft-12** and **Cookies
+Having Independent Partitioned State (CHIPS)**. These are not finalised
+standards, so it is to be expected this module may change behaviour to keep up
+to date.
+
+To aid adoption, this module will work as a drop in replacement for
+[HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar).  A compatible API has been implemented to allow existing
+user agents to benefit from the performance gains.
+
+However long term, user agents will need to be modified in order to take full
+advantage of this module. Not only are there differences in the general API
+compared to popular cookie jars, but conceptually the notion of 'browsing
+context' needs to be implemented.
+
+Finally, for explicit encoding and decoding of cookie strings (not via a cookie
+jar), please see the companion [HTTP::State::Cookie](https://metacpan.org/pod/HTTP%3A%3AState%3A%3ACookie) module. This is used
+internally for encoding and decoding cookies.
+
+## Summary of RFC6265bis and CHIPS
+
+At the time of writing RFC6265bis-draft is a version '12'. As the RFC
+progresses this module will be updated accordingly. The highlight take away
+feature implemented/utilized in this module are:
 
 - Public suffix checking
+
+    Cookies are tested for public suffixes  (ie .com, .org, .com.au) and rejected
+    if the cookie domain is not below such a level. This prevents a trackers and
+    information leakage at a basic level.
+
 - Prefix cookie name processing
-- Restricted upper limit of expiry dates
-- same site status
-- API or HTTP
-- safe method
-- top level navigation
 
-Default importing of the module does not import any symbols. If you intend to
-use the extended RFC6265bis-draft features directly, please import with
-":flags" parameter for bit field masks.
+    Cookies names prefixed with \_\_Host- and \_\_Secure- are subject to addition
+    requirements before being stored.
 
-For explicit encoding and decoding of cookie strings (not via a cookie jar),
-please see the companion [HTTP::State::Cookie](https://metacpan.org/pod/HTTP%3A%3AState%3A%3ACookie) module. This is used internally
-for encoding and decoding cookies.
+- Reduced pper limit of expiry dates
 
-# SAMESITE and CONTEXT
+    Cookies expire 400 days (or user defined) in the future, instead of potentially
+    years.
 
-It is necessary the user agent performs additional book keeping and testing
-of what is a 'same site' request, top level navigation, reloading, document etc
-to fully utilise the additional functionality available in this module.
+- Browsing Context
 
-While these tests/conditions are specified in RFC6265bis-draft, it is not in
-the scope of this module and needs to be implemented in a user-agent.  The
-results of such tests are represented as bit fields, which are used to guide
-the store/retrieve algorithm accordingly within this module.
+    User agents should be performing additional book keeping and testing of what is
+    a 'same site' request, top level navigation, reloading, document etc to fully
+    utilise the additional functionality available in this module.
 
-# COMPATIBILITY
+    While these tests/conditions are specified in RFC6265bis-draft, it is not in
+    the scope of this module and needs to be implemented in a user-agent.  The
+    results of such tests are represented as bit fields, which are used to guide
+    the store/retrieve algorithm accordingly within this module:
+
+    - samesite/crosssite
+    - API/HTTP
+    - safe/unsafe method
+    - top/nontop level navigation
+
+- Partitioning (CHIPS)
+
+    Cookies Having Independent Partitioned State (CHIPS), effectively gives each
+    first party site it's own cookie jar. Third party cookies set from resources
+    requested by the first party site are stored in this 'partitioned cookie jar'.
+
+    These cannot be used by another first party site requesting resources from the
+    same third party site.  Hence limiting tracking. 
+
+## COMPATIBILITY
 
 A compatibility interface matching that of  [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) is available to
-aid in adoption of this module.
+aid in adoption.
 
-This in theory should allow user-agents like [HTTP::Tiny](https://metacpan.org/pod/HTTP%3A%3ATiny) and [Furl](https://metacpan.org/pod/Furl) for
+In theory, this should allow user-agents like [HTTP::Tiny](https://metacpan.org/pod/HTTP%3A%3ATiny) and [Furl](https://metacpan.org/pod/Furl) for
 example to benefit from performance and security improvements with limited
 changes to existing code.
 
-To work around the lack of same site / browsing context support in the
-[HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) API, the compatibility API utilises the current values of
-the 'default flags' for the cookie jar. 
+To work around the lack of same site / browsing context / partitioning support
+in the [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) API, the compatibility API utilises the current
+values of the 'default flags' for the cookie jar and disables partitioning by
+default
 
 # API
 
 ## User Agent Context Flags
 
-Flags are used to mark the intent of a request initiated by a user-agent. 
+Flags are implemented as constants and can be exported using the  ":flags" tag
+at import:
+
+```perl
+use HTTP::State ":flags";
+```
+
+They are a space efficient method of describing the intent and context of a
+request initiated by a user-agent. Multiple flags are ORed together into a bit
+field. This bit field is required for storing and retrieval of cookies
+throughout this API.
+
+As mentioned previously, the user-agent or other external code is responsible
+for performing tests on the context.  The flags are for conveying the results
+to the cookie jar.
 
 ### FLAG\_SAME\_SITE
 
-When this flag is set, request is considered "same-site". When unset, request
+When this flag is set, a request is considered "same-site". When unset, request
 is considered "cross-site".
+
+A same site request is one which loads resources for a document from the same
+host and scheme as the current 'document' for example.
 
 ### FLAG\_TYPE\_HTTP
 
 When this flag is set, request is considered "HTTP". When unset, request is
 considered "non-HTTP".
 
+In a browser this represents if a request for a resource was initiated by from
+a html document (HTTP) or from javascript (non-HTTP).
+
 ### FLAG\_SAFE\_METH
 
 When this flag is set, request is considered "safe". When unset, request is
 considered "unsafe".
+
+POST and PUT methods in HTTP are considered unsafe.
 
 ### FLAG\_TOP\_LEVEL
 
 When this flag is set, request is considered "top level". When unset, request
 is considered "not-top-level".
 
-## Createing a cookie jar
+Top level requests include manually typing in a URL and navigating to it and 
+
+## Creating a cookie jar
 
 ### new
 
@@ -142,10 +204,22 @@ Creates a new cookie jar object. Optional named arguments can be provided:
     Sets the default flags used for storing and retrieving cookies, when no defined
     value is provided via `retrieve_cookies` and `store_cookies`
 
-    Is also the value used in the compatibility API
+    It is also the value used in the compatibility API.
 
     Default is all flags on
+
     (FLAG\_TYPE\_HTTP|FLAG\_TOP\_LEVEL|FLAG\_SAME\_SITE|FLAG\_SAFE\_METH).
+
+- enable\_partition
+
+    ```perl
+    my $jar=HTTP::State->new(enable_partition=>...);
+    ```
+
+    Enables partition support for partition cookies.  When enabled, cookies are
+    stored in relevant partitions.
+
+    The default value is false (off)
 
 - retrieve\_sort
 
@@ -166,7 +240,7 @@ Creates a new cookie jar object. Optional named arguments can be provided:
 
     The upper limit in duration a cookie can be valid for.  Value is in seconds.
 
-    Default is 400 days (400 \* 24\* 3600)
+    Default is 400 days (400 \* 24 \* 3600)
 
 - lax\_allowing\_unsafe
 
@@ -210,7 +284,7 @@ better use of 'browsing context'.
 ### store\_cookies
 
 ```
-$jar->store_cookies($request_uri, $flags, $string_or_struct, ...);
+$jar->store_cookies($request_uri, $partition, $flags, $string_or_struct, ...);
 ```
 
 Takes a `$request_url` , browsing context `$flags` and one or more Set-Cookie
@@ -221,13 +295,17 @@ The exact processing of the cookies is subject to the `$flags` bit field,
 which is a combination of the 'context flags'. If set to `undef` the current
 default bit flags for the cookie jar will be used.
 
+The `$partition` argument, is the partition hey scheme://host) of the first
+party site. Cookies are stored to this partition if the jar was instantiated
+with the `enable_partition` option.
+
 This method in intended to be called from a user-agent on receipt of a HTTP
 response.
 
 ### retrieve\_cookies
 
 ```
-$jar->retrieve_cookies($request_url, $flags); 
+$jar->retrieve_cookies($request_url, $partition, $flags); 
 ```
 
 Retrieves cookies from a jar, for the specified `$request_url` according to
@@ -238,6 +316,10 @@ The exact processing of the cookies is subject to the `$flags` bit field,
 which is a combination of the 'context flags'. If set to `undef` the current
 default bit flags for the cookie jar will be used.
 
+The `$partition` argument, is the name (scheme://host) of the first party
+site, which is used as a partition key. Cookies are only retrieved from this
+partition if the jar was instantiated with the `enable_partition` option.
+
 This method in intended to be called from a user-agent in generation of a HTTP
 request.
 
@@ -247,7 +329,7 @@ request.
 
 ```
 $jar->get_cookies($request_url);
-$jar->get_cookies($request_url, $flags); 
+$jar->get_cookies($request_url, $partition, $flags); 
 ```
 
 Takes the same arguments as `retrieve_cookies` and matches the same cookies.
@@ -336,6 +418,9 @@ persistent cookies to be processed, ignoring session cookies.
 Adjusts the creation and last access times to be relative to epoch in the local
 time, instead of GMT for interoperability with [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar). 
 
+Partitioned cookies are also included in the dump, with the partition key
+stored, for later loading.
+
 ### load\_cookies
 
 ```
@@ -350,36 +435,8 @@ seconds.
 
 Please refer to the [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) for further information.
 
-# Algorithm
-
-Some specific design tricks are used to improve the storage and retrieval
-process compared to other cookie jars.
-
-- Keyed
-
-    Cookies are uniquely identified by the domain, path, name and  host only flag
-    (as per RFC6265bis-draft). These are combined into a key, which make it easy to
-    sort
-
-- Reversed Domain Names
-
-    The domain value (in the key and domain field) is stored in reverse, allowing
-    the use of `index` to do domain matching of the key directly as  prefix instead of a suffix.
-
-- Cached public suffix
-
-    Public suffix lookups are cached and also stored in reverse for direct
-    substring comparison to domains.
-
-- Binary Search
-
-    Sorting and searching of the cookies is done firstly by 'second level domain'
-    of a request URL using binary search provided by [List::Insertion](https://metacpan.org/pod/List%3A%3AInsertion)
-
-- Preresolved subroutine references
-
-    The main retrieval subroutine is an anonymous sub instead of a method, for
-    better argument reuse and no unneeded dynamic lookup.
+Partitioned cookies store the partition key in the Partitioned attribute. If
+this is present cookies are loaded into the specified partition.
 
 # PERFORMANCE
 
@@ -392,20 +449,30 @@ http_state     1614/s          2682%             --           -19%
 protocol_http  1987/s          3325%            23%             --
 ```
 
-# TODO
-
-Encode jar to other formats
-
 # COMPARISON TO OTHER MODULES
 
 [Protocol::HTTP::CookieJar](https://metacpan.org/pod/Protocol%3A%3AHTTP%3A%3ACookieJar) is a very fast cookie jar module, also
-implementing RFC6265bis-draft, though it requires a large number of XS modules
-to get going.
+implementing RFC6265bis-draft. It requires a large number of XS modules to get
+going and does not at the time of writing support partitioned cookies.
 
 [HTTP::CookieJar](https://metacpan.org/pod/HTTP%3A%3ACookieJar) is the cookie jar suggested in the [LWP](https://metacpan.org/pod/LWP) documentation.
 While it has public suffix support, it doesn't provide the additional
 conditions of RFC6265bis-draft. It is also quite slow in comparison to this
 module.
+
+# SEE ALSO
+
+The main resources used in implementing this module:
+
+- [https://github.com/privacycg/CHIPS#opt-in-partitioned-cookies](https://github.com/privacycg/CHIPS#opt-in-partitioned-cookies)
+- [https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis](https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis)
+- [https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies)
+
+# TODO
+
+- Create LWP adaptor
+- Mojo User Agnet adaptor
+- More tests
 
 # AUTHOR
 
