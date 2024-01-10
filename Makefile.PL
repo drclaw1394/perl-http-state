@@ -25,7 +25,7 @@ WriteMakefile(
         repository =>{
           type => "git",
           url => "git://github.com/drclaw1394/perl-http-state.git",
-          web => "http://github.com/drclaw1394/perl-http-state",
+          web => "https://github.com/drclaw1394/perl-http-state",
         }
       }
     }
